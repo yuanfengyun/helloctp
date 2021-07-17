@@ -1,10 +1,13 @@
-from tqsdk import TqApi, TqBacktest,TqAccount, TargetPosTask,TqAuth
 import time
 import threading
 import platform
 import datetime
 import os
 import sys
+
+sys.path.insert(0,"../")
+
+from tqsdk import TqApi, TqAccount
 
 if platform.system() == "Linux":
     import readline
@@ -15,31 +18,19 @@ def cls():
     else:
         os.system("cls")
 
-plat = ""
 account = ""
 password = ""
 
-kqaccount = ""
-kqpassword = ""
-
-if len(sys.argv) >= 6:
-    plat = sys.argv[1]
-    kqaccount = sys.argv[2]
-    kqpassword = sys.argv[3]
-    account = sys.argv[4]
-    password = sys.argv[5]
+if len(sys.argv) >= 3:
+    account = sys.argv[1]
+    password = sys.argv[2]
 else:
     import login
-    plat = login.platform
     account = login.account
     password = login.password
 
+api = TqApi(TqAccount(account, password))
 
-api = None
-if plat != "":
-    api = TqApi(TqAccount(plat, account, password),auth=TqAuth(kqaccount,kqpassword))
-else:
-    api = TqApi()
 l = []
 mquote = {}
 mposition = {}

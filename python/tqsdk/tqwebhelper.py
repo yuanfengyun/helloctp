@@ -12,8 +12,7 @@ from urllib.parse import urlparse
 import simplejson
 from aiohttp import web
 
-from tqsdk.account import TqAccount, TqKq
-from tqsdk.auth import TqAuth
+from tqsdk.account import TqAccount
 from tqsdk.backtest import TqBacktest, TqReplay
 from tqsdk.channel import TqChan
 from tqsdk.datetime import _get_trading_day_start_time

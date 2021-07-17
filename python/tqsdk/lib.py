@@ -10,8 +10,7 @@ from asyncio import gather
 from typing import Optional, Union, Callable
 
 from tqsdk import utils
-from tqsdk.api import TqApi, TqAccount, TqSim, TqKq
-from tqsdk.backtest import TqBacktest
+from tqsdk.api import TqApi, TqAccount
 from tqsdk.channel import TqChan
 from tqsdk.datetime import _is_in_trading_time
 from tqsdk.diff import _get_obj
@@ -59,7 +58,7 @@ class TargetPosTask(object, metaclass=TargetPosTaskSingleton):
     def __init__(self, api: TqApi, symbol: str, price: Union[str, Callable[[str], Union[float, int]]] = "ACTIVE",
                  offset_priority: str = "今昨,开", min_volume: Optional[int] = None, max_volume: Optional[int] = None,
                  trade_chan: Optional[TqChan] = None,
-                 account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> None:
+                 account: Optional[Union[TqAccount]] = None) -> None:
         """
         创建目标持仓task实例，负责调整归属于该task的持仓 **(默认为整个账户的该合约净持仓)**.
 
@@ -349,7 +348,7 @@ class InsertOrderUntilAllTradedTask(object):
 
     def __init__(self, api, symbol, direction, offset, volume, min_volume: Optional[int] = None,
                  max_volume: Optional[int] = None, price: Union[str, Callable[[str], Union[float, int]]] = "ACTIVE",
-                 trade_chan=None, account: Optional[Union[TqAccount, TqKq, TqSim]] = None):
+                 trade_chan=None, account: Optional[Union[TqAccount]] = None):
         """
         创建追价下单task实例
 
@@ -489,7 +488,7 @@ class InsertOrderTask(object):
     """下单task （注：此类主要在tqsdk内部使用，并非简单用法，不建议用户使用）"""
 
     def __init__(self, api, symbol, direction, offset, volume, limit_price=None, order_chan=None, trade_chan=None,
-                 account: Optional[Union[TqAccount, TqKq, TqSim]] = None):
+                 account: Optional[Union[TqAccount]] = None):
         """
         创建下单task实例
 

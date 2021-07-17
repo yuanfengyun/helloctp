@@ -33,10 +33,7 @@ import requests
 from pandas import RangeIndex, Index
 from pandas.core.internals import FloatBlock
 
-from tqsdk.auth import TqAuth
-from tqsdk.account import TqAccount, TqKq
-from tqsdk.multiaccount import TqMultiAccount
-from tqsdk.backtest import TqBacktest, TqReplay
+from tqsdk.account import TqAccount
 from tqsdk.channel import TqChan
 from tqsdk.connect import TqConnect, MdReconnectHandler, TdReconnectHandler, ReconnectTimer
 from tqsdk.data_series import DataSeries
@@ -46,8 +43,6 @@ from tqsdk.entity import Entity
 from tqsdk.log import _get_log_name, _clear_logs
 from tqsdk.objs import Quote, Kline, Tick, Account, Position, Order, Trade, QuotesEntity, RiskManagementRule, RiskManagementData
 from tqsdk.objs import SecurityAccount, SecurityOrder, SecurityTrade, SecurityPosition
-from tqsdk.tqwebhelper import TqWebHelper
-from tqsdk.stockprofit import TqStockProfit
 from tqsdk.utils import _generate_uuid, _query_for_quote, _symbols_to_quotes, _query_for_init, \
     BlockManagerUnconsolidated, _quotes_add_night
 from tqsdk.tafunc import get_dividend_df, get_dividend_factor
@@ -61,17 +56,20 @@ class TqApi(object):
     通常情况下, 一个线程中 **应该只有一个** TqApi的实例, 它负责维护网络连接, 接收行情及账户数据, 并在内存中维护业务数据截面
     """
 
-    def __init__(self, account: Union[TqAccount,None] = None) -> None:
+    def __init__(self, account) -> None:
         # 初始化 logger
         self._logger = logging.getLogger("TqApi")
         self._logger.setLevel(logging.DEBUG)
         self.disable_print = False
 
-        self._debug = debug  # 日志选项
+        self._debug = True  # 日志选项
+        self._account = account
         self._ins_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
-        self._md_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
-        self._td_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
-        self._loop = asyncio.SelectorEventLoop() if loop is None else loop  # 创建一个新的 ioloop, 避免和其他框架/环境产生干扰
+        self._md_url = "wss://free-openmd.shinnytech.com/t/md/front/mobile"
+        self._td_url = "wss://127.0.0.1:7788/"
+        self._loop = asyncio.SelectorEventLoop()  # 创建一个新的 ioloop, 避免和其他框架/环境产生干扰
+
+        self._base_headers = {}
 
         # 初始化loop
         self._send_chan, self._recv_chan = TqChan(self), TqChan(self)  # 消息收发队列
@@ -734,7 +732,7 @@ class TqApi(object):
     def insert_order(self, symbol: str, direction: str, offset: str = "", volume: int = 0,
                      limit_price: Union[str, float, None] = None,
                      advanced: Optional[str] = None, order_id: Optional[str] = None, account: Optional[Union[
-                TqAccount, TqKq, TqSim]] = None) -> Order:
+                TqAccount]] = None) -> Order:
         """
         发送下单指令. **注意: 指令将在下次调用** :py:meth:`~tqsdk.api.TqApi.wait_update` **时发出**
 
@@ -900,7 +898,7 @@ class TqApi(object):
             return order
 
     def _get_insert_order_pack(self, symbol, direction, offset, volume, limit_price, advanced, order_id,
-                               account: Optional[Union[TqAccount, TqKq, TqSim]] = None):
+                               account: Optional[Union[TqAccount]] = None):
         quote = self._data["quotes"][symbol]
         (exchange_id, instrument_id) = symbol.split(".", 1)
         msg = {
@@ -943,7 +941,7 @@ class TqApi(object):
         return msg
 
     async def _insert_order_async(self, symbol, direction, offset, volume, limit_price, advanced, order_id,
-                                  account: Optional[Union[TqAccount, TqKq, TqSim]] = None):
+                                  account: Optional[Union[TqAccount]] = None):
         await self._ensure_symbol_async(symbol)  # 合约是否存在
         self._auth._has_td_grants(symbol)  # 用户是否有该合约交易权限
         (exchange_id, instrument_id) = symbol.split(".", 1)
@@ -954,7 +952,7 @@ class TqApi(object):
 
     # ----------------------------------------------------------------------
     def cancel_order(self, order_or_order_id: Union[str, Order],
-                     account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> None:
+                     account: Optional[Union[TqAccount]] = None) -> None:
         """
         发送撤单指令. **注意: 指令将在下次调用** :py:meth:`~tqsdk.api.TqApi.wait_update` **时发出**
 
@@ -1034,7 +1032,7 @@ class TqApi(object):
         self._send_pack(msg)
 
     # ----------------------------------------------------------------------
-    def get_account(self, account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> Account:
+    def get_account(self, account: Optional[Union[TqAccount]] = None) -> Account:
         """
         获取用户账户资金信息
         Args:
@@ -1083,7 +1081,7 @@ class TqApi(object):
                         prototype["trade"]["*"]["accounts"]["@"])
 
     # ----------------------------------------------------------------------
-    def get_position(self, symbol: Optional[str] = None, account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> \
+    def get_position(self, symbol: Optional[str] = None, account: Optional[Union[TqAccount]] = None) -> \
             Union[Position, Entity]:
         """
         获取用户持仓信息
@@ -1150,7 +1148,7 @@ class TqApi(object):
         return _get_obj(self._data, ["trade", self._account._get_account_key(account), "positions"])
 
     # ----------------------------------------------------------------------
-    def get_order(self, order_id: Optional[str] = None, account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> \
+    def get_order(self, order_id: Optional[str] = None, account: Optional[Union[TqAccount]] = None) -> \
             Union[Order, Entity]:
         """
         获取用户委托单信息
@@ -1211,7 +1209,7 @@ class TqApi(object):
         return _get_obj(self._data, ["trade", self._account._get_account_key(account), "orders"])
 
     # ----------------------------------------------------------------------
-    def get_trade(self, trade_id: Optional[str] = None, account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> \
+    def get_trade(self, trade_id: Optional[str] = None, account: Optional[Union[TqAccount]] = None) -> \
             Union[Trade, Entity]:
         """
         获取用户成交信息
@@ -1256,7 +1254,7 @@ class TqApi(object):
 
     # ----------------------------------------------------------------------
     def get_risk_management_rule(self, exchange_id: Optional[str] = None,
-                                 account: Optional[Union[TqAccount, TqKq, TqSim]] = None) -> Union[RiskManagementRule, Entity]:
+                                 account: Optional[Union[TqAccount]] = None) -> Union[RiskManagementRule, Entity]:
         """
         获取账户风控统计规则
 
@@ -1293,7 +1291,7 @@ class TqApi(object):
     def set_risk_management_rule(self, exchange_id: str, enable: bool, count_limit: int = None, insert_order_count_limit: Optional[int] = None,
                                  cancel_order_count_limit: Optional[int] = None, cancel_order_percent_limit: Optional[float] = None,
                                  trade_units_limit: Optional[int] = None, trade_position_ratio_limit: Optional[float] = None,
-                                 account: Optional[Union[TqAccount, TqKq, TqSim]] = None):
+                                 account: Optional[Union[TqAccount]] = None):
         """
         设置交易所风控规则. **注意: 指令将在下次调用** :py:meth:`~tqsdk.api.TqApi.wait_update` **时发出**
         调用本函数时，没有填写的可选参数会被服务器设置为默认值。
@@ -1370,7 +1368,7 @@ class TqApi(object):
         return rule
 
     # ----------------------------------------------------------------------
-    def get_risk_management_data(self, symbol: Optional[str] = None, account: Optional[Union[TqAccount, TqKq, TqSim]] = None
+    def get_risk_management_data(self, symbol: Optional[str] = None, account: Optional[Union[TqAccount]] = None
                                  ) -> Union[RiskManagementData, Entity]:
         """
         获取账户风控统计数据
@@ -1435,7 +1433,7 @@ class TqApi(object):
             self._process_serial_extra_array(serial)
         # 先尝试执行各个task,再请求下个业务数据
         self._run_until_idle()
-        if not self._is_slave and self._diffs:
+        if self._diffs:
             self._send_chan.send_nowait({
                 "aid": "peek_message"
             })
@@ -1963,10 +1961,6 @@ class TqApi(object):
 
     def _setup_connection(self):
         """初始化"""
-        tq_web_helper = TqWebHelper(self)
-
-        self._account = self._account if isinstance(self._account, TqMultiAccount) else TqMultiAccount([self._account])
-
         # TqWebHelper 初始化可能会修改 self._account、self._backtest，所以在这里才初始化 logger
         # 在此之前使用 self._logger 不会打印日志
         if not self._logger.handlers and (self._debug or
@@ -2006,7 +2000,7 @@ class TqApi(object):
         ws_md_send_chan, ws_md_recv_chan = api_send_chan, api_recv_chan
 
         # 启动账户实例并连接交易服务器
-        self._account._run(self, self._send_chan, self._recv_chan, ws_md_send_chan, ws_md_recv_chan)
+        await self._account._run(self, api_send_chan, api_recv_chan, self._send_chan, self._recv_chan, ws_md_send_chan, ws_md_recv_chan)
 
         # 发送第一个peek_message,因为只有当收到上游数据包时wait_update()才会发送peek_message
         self._send_chan.send_nowait({

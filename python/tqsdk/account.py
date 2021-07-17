@@ -12,53 +12,18 @@ from typing import Optional
 
 
 class TqAccount(object):
-    """天勤实盘类"""
+    """实盘类"""
 
-    def __init__(self, broker_id: str, account_id: str, password: str, front_broker: Optional[str] = None,
-                 front_url: Optional[str] = None, td_url: Optional[str] = None, account_type: str = "FUTURE") -> None:
-        """
-        创建天勤实盘实例
-
-        Args:
-            broker_id (str): 期货公司，支持的期货公司列表 https://www.shinnytech.com/blog/tq-support-broker/
-
-            account_id (str): 帐号
-
-            password (str): 密码
-
-            front_broker(str): [可选]CTP交易前置的Broker ID, 用于连接次席服务器, eg: "2020"
-
-            front_url(str): [可选]CTP交易前置地址, 用于连接次席服务器, eg: "tcp://1.2.3.4:1234/"
-
-            td_url(str): [可选]用于指定账户连接的交易服务器地址, eg: "tcp://1.2.3.4:1234/"
-
-            account_type(str): [可选]用于指定账户类型
-                * FUTURE [默认]: 期货账户
-
-                * SPOT: 股票现货账户
-        """
-        if bool(front_broker) != bool(front_url):
-            raise Exception("front_broker 和 front_url 参数需同时填写")
-        if not isinstance(broker_id, str):
-            raise Exception("broker_id 参数类型应该是 str")
+    def __init__(self, account_id: str, password: str) -> None:
         if not isinstance(account_id, str):
             raise Exception("account_id 参数类型应该是 str")
         if not isinstance(password, str):
             raise Exception("password 参数类型应该是 str")
-        if account_type not in ["FUTURE", "SPOT"]:
-            raise Exception("account_type 账户类型指定错误")
-        self._broker_id = broker_id.strip()
-        self._account_type = account_type
         self._account_id = account_id.strip()
-        self._sub_account_id = None
         self._account_key = str(id(self))
         self._password = password
-        self._front_broker = front_broker
-        self._front_url = front_url
-        self._td_url = td_url
         self._app_id = "SHINNY_TQ_1.0"
         self._system_info = ""
-        self._order_id = 0  #最新股票下单委托合同编号
 
     def _get_system_info(self):
         try:
@@ -90,7 +55,7 @@ class TqAccount(object):
     async def _run(self, api, api_send_chan, api_recv_chan, md_send_chan, md_recv_chan, td_send_chan, td_recv_chan):
         req = {
             "aid": "req_login",
-            "bid": self._broker_id,
+            "bid": "0",
             "user_name": self._account_id,
             "password": self._password,
         }
@@ -101,12 +66,8 @@ class TqAccount(object):
         if system_info:
             req["client_app_id"] = self._app_id
             req["client_system_info"] = system_info
-        if self._front_broker:
-            req["broker_id"] = self._front_broker
-            req["front"] = self._front_url
         await td_send_chan.send(req)
-        if self._account_type == 'FUTURE':
-            await td_send_chan.send({
+        await td_send_chan.send({
                 "aid": "confirm_settlement"
             })  # 自动发送确认结算单
         self._pending_peek = False  # 是否有下游收到未处理的 peek_message
@@ -161,14 +122,8 @@ class TqAccount(object):
             for _, slice_item in enumerate(pack["data"] if "data" in pack else []):
                 if "trade" not in slice_item:
                     continue
-                # 股票账户需要根据登录确认包确定客户号与资金账户
-                if self._account_type != 'FUTURE' and self._sub_account_id is None:
-                    self._sub_account_id = self._get_sub_account(slice_item["trade"])
-
                 if self._account_id in slice_item["trade"]:
                     slice_item["trade"][self._account_key] = slice_item["trade"].pop(self._account_id)
-                elif self._sub_account_id in slice_item["trade"]:
-                    slice_item["trade"][self._account_key] = slice_item["trade"].pop(self._sub_account_id)
             if pack["aid"] == "rtn_data":
                 self._diffs.extend(pack.get('data', []))
             else:
@@ -177,26 +132,3 @@ class TqAccount(object):
                 "aid": "peek_message"
             })
             await self._send_diff(api_recv_chan)
-
-    def _get_sub_account(self, trade):
-        """ 股票账户
-         OTG 登录确认包格式
-         {'trade': {'sub_account_key': {'session': {'user_id': '', 'trading_day': ''}}}} 
-         """
-        for k, v in trade.items():
-            if 'session' in v.keys() and v.get('session').get('user_id', '') == self._account_id:
-                return k
-        return None
-
-    @property
-    def _next_order_id(self):
-        self._order_id += 1
-        return self._order_id
-
-
-class TqKq(TqAccount):
-    def __init__(self, td_url: Optional[str] = None):
-        """
-        创建快期模拟账户实例
-        """
-        super().__init__("快期模拟", "", "", td_url=td_url)

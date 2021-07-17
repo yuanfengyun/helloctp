@@ -1,22 +1,5 @@
 #!/usr/bin/env python
 #  -*- coding: utf-8 -*-
-"""
-天勤接口的PYTHON封装, 提供以下功能
-
-* 连接行情和交易服务器, 接收行情及交易推送数据
-* 在内存中存储管理一份完整的业务数据(行情+交易), 并在接收到新数据包时更新内存数据
-* 通过一批函数接口, 支持用户代码访问业务数据
-* 发送交易指令
-* 提供本地的模拟交易账户，同时完成撮合成交
-* 支持回测功能
-
-
-* PYTHON SDK使用文档: https://doc.shinnytech.com/pysdk/latest/
-* 天勤vscode插件使用文档: https://doc.shinnytech.com/pysdk/latest/devtools/vscode.html
-* 天勤用户论坛: https://www.shinnytech.com/qa/
-"""
-__author__ = 'chengzhi'
-
 import asyncio
 import copy
 import functools
@@ -63,7 +46,6 @@ from tqsdk.entity import Entity
 from tqsdk.log import _get_log_name, _clear_logs
 from tqsdk.objs import Quote, Kline, Tick, Account, Position, Order, Trade, QuotesEntity, RiskManagementRule, RiskManagementData
 from tqsdk.objs import SecurityAccount, SecurityOrder, SecurityTrade, SecurityPosition
-from tqsdk.sim import TqSim
 from tqsdk.tqwebhelper import TqWebHelper
 from tqsdk.stockprofit import TqStockProfit
 from tqsdk.utils import _generate_uuid, _query_for_quote, _symbols_to_quotes, _query_for_init, \
@@ -79,152 +61,16 @@ class TqApi(object):
     通常情况下, 一个线程中 **应该只有一个** TqApi的实例, 它负责维护网络连接, 接收行情及账户数据, 并在内存中维护业务数据截面
     """
 
-    def __init__(self, account: Union[TqMultiAccount, TqAccount, TqSim, None] = None, auth: Union[TqAuth, str, None] = None, url: Optional[str] = None,
-                 backtest: Union[TqBacktest, TqReplay, None] = None, web_gui: [bool, str] = False, debug: Union[bool, str, None] = False,
-                 loop: Optional[asyncio.AbstractEventLoop] = None, disable_print: bool = False, _stock: bool = True,
-                 _ins_url=None, _md_url=None, _td_url=None) -> None:
-        """
-        创建天勤接口实例
-
-        Args:
-            account (None/TqAccount/TqSim): [可选]交易账号:
-                * None: 账号将根据环境变量决定, 默认为 :py:class:`~tqsdk.sim.TqSim`
-
-                * :py:class:`~tqsdk.account.TqAccount` : 使用实盘账号, 直连行情和交易服务器, 需提供期货公司/帐号/密码
-
-                * :py:class:`~tqsdk.account.TqKq` : 使用快期账号登录，直连行情和快期模拟交易服务器, 需提供 auth 参数
-
-                * :py:class:`~tqsdk.sim.TqSim` : 使用 TqApi 自带的内部模拟账号
-
-                * :py:class:`~tqsdk.multiaccount.TqMultiAccount` :
-                多账户列表，列表中支持`~tqsdk.account.TqAccount`、`~tqsdk.account.TqKq` 和
-                `~tqsdk.sim.TqSim` 中的 0 至 N 个或者组合
-
-            auth (TqAuth/str): [必填]用户信易账户:
-                * :py:class:`~tqsdk.auth.TqAuth` : 添加信易账户类，例如：TqAuth("tianqin@qq.com", "123456")
-
-                * str: 用户权限认证对象为天勤用户论坛的邮箱和密码，中间以英文逗号分隔，例如： "tianqin@qq.com,123456"
-                信易账户注册链接 https://www.shinnytech.com/register-intro/
-
-            url (str): [可选]指定服务器的地址
-                * 当 account 为 :py:class:`~tqsdk.account.TqAccount` 类型时, 可以通过该参数指定交易服务器地址, \
-                默认使用 wss://opentd.shinnytech.com/trade/user0, 行情始终使用 wss://openmd.shinnytech.com/t/md/front/mobile
-
-                * 当 account 为 :py:class:`~tqsdk.sim.TqSim` 类型时, 可以通过该参数指定行情服务器地址,\
-                默认使用 wss://openmd.shinnytech.com/t/md/front/mobile
-
-            backtest (TqBacktest/TqReplay): [可选] 进入时光机，此时强制要求 account 类型为 :py:class:`~tqsdk.sim.TqSim`
-                * :py:class:`~tqsdk.backtest.TqBacktest` : 传入 TqBacktest 对象，进入回测模式 \
-                在回测模式下, TqBacktest 连接 wss://openmd.shinnytech.com/t/md/front/mobile 接收行情数据, \
-                由 TqBacktest 内部完成回测时间段内的行情推进和 K 线、Tick 更新.
-
-                * :py:class:`~tqsdk.backtest.TqReplay` : 传入 TqReplay 对象, 进入复盘模式 \
-                在复盘模式下, TqReplay 会在服务器申请复盘日期的行情资源, 由服务器推送复盘日期的行情.
-
-            debug(bool/str): [可选] 是否将调试信息输出到指定文件，默认值为 False。
-                * None [默认]: 根据账户情况不同，默认值的行为不同。
-
-                    + 使用 :py:class:`~tqsdk.account.TqAccount` 或者 :py:class:`~tqsdk.account.TqKq` 实盘账户时，调试信息输出到指定文件夹 `~/.tqsdk/logs`。
-
-                    + 使用 :py:class:`~tqsdk.sim.TqSim` 模拟账户时，调试信息不输出。
-
-                * True: 调试信息会输出到指定文件夹 `~/.tqsdk/logs`。
-
-                * False: 不输出调试信息。
-
-                * str: 指定一个日志文件名, 调试信息输出到指定文件。
-
-            loop(asyncio.AbstractEventLoop): [可选] 使用指定的 IOLoop, 默认创建一个新的.
-
-            web_gui(bool/str): [可选]是否启用图形化界面功能, 默认不启用.
-                * 启用图形化界面传入参数 web_gui=True 会每次以随机端口生成网页，也可以直接设置本机IP和端口 web_gui=[ip]:port 为网页地址，
-                ip 可选，默认为 0.0.0.0，参考example 6
-
-                * 为了图形化界面能够接收到程序传输的数据并且刷新，在程序中，需要循环调用 api.wait_update的形式去更新和获取数据
-
-                * 推荐打开图形化界面的浏览器为Google Chrome 或 Firefox
-
-        Example1::
-
-            # 使用实盘帐号直连行情和交易服务器
-            from tqsdk import TqApi, TqAuth, TqAccount
-            api = TqApi(TqAccount("H海通期货", "022631", "123456"), auth=TqAuth("信易账户", "账户密码"))
-
-        Example2::
-
-            # 使用快期模拟帐号连接行情服务器
-            from tqsdk import TqApi, TqAuth, TqKq
-            api = TqApi(TqKq(), auth=TqAuth("信易账户", "账户密码"))  # 根据填写的信易账户参数连接指定的快期模拟账户
-
-        Example3::
-
-            # 使用模拟帐号直连行情服务器
-            from tqsdk import TqApi, TqAuth, TqSim
-            api = TqApi(TqSim(), auth=TqAuth("信易账户", "账户密码"))  # 不填写参数则默认为 TqSim() 模拟账号
-
-        Example4::
-
-            # 进行策略回测
-            from datetime import date
-            from tqsdk import TqApi, TqAuth, TqBacktest
-            api = TqApi(backtest=TqBacktest(start_dt=date(2018, 5, 1), end_dt=date(2018, 10, 1)), auth=TqAuth("信易账户", "账户密码"))
-
-        Example5::
-
-            # 进行策略复盘
-            from datetime import date
-            from tqsdk import TqApi, TqAuth, TqReplay
-            api = TqApi(backtest=TqReplay(replay_dt=date(2019, 12, 16)), auth=TqAuth("信易账户", "账户密码"))
-
-        Example6::
-
-            # 开启 web_gui 功能，使用默认参数True
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(web_gui=True, auth=TqAuth("信易账户", "账户密码"))
-
-        Example7::
-
-            # 开启 web_gui 功能，使用本机IP端口固定网址生成
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(web_gui=":9876", auth=TqAuth("信易账户", "账户密码"))  # 等价于 api = TqApi(web_gui="0.0.0.0:9876", auth=TqAuth("信易账户", "账户密码"))
-
-        """
-
+    def __init__(self, account: Union[TqAccount,None] = None) -> None:
         # 初始化 logger
         self._logger = logging.getLogger("TqApi")
         self._logger.setLevel(logging.DEBUG)
-        self.disable_print = disable_print
+        self.disable_print = False
 
-        # 记录参数
         self._debug = debug  # 日志选项
-        if isinstance(auth, TqAuth):
-            self._auth = auth
-        elif isinstance(auth, str):
-            comma_index = auth.find(',')
-            if comma_index == -1:
-                raise Exception(f"不能正确解析 auth=\"{auth}\", 请填写正确的 auth 参数，以英文逗号分隔用户名和密码，例如：\"tianqin@qq.com,123456\"。")
-            user_name, pwd = auth[:comma_index], auth[comma_index + 1:]
-            self._auth = TqAuth(user_name, pwd)
-        else:
-            self._auth = None
-        self._account = TqSim() if account is None else account
-        self._backtest = backtest
-        self._stock = False if isinstance(self._backtest, TqReplay) else _stock
-        self._ins_url = os.getenv("TQ_INS_URL", "https://openmd.shinnytech.com/t/md/symbols/latest.json")
-        self._md_url = os.getenv("TQ_MD_URL", None)
-        self._td_url = os.getenv("TQ_TD_URL", None)
-        if url and isinstance(self._account, TqMultiAccount):
-            raise Exception("多账户模式下，交易服务器地址需在创建账户实例时单独指定")
-        if url and isinstance(self._account, TqSim):
-            self._md_url = url
-        if url and isinstance(self._account, TqAccount):
-            self._td_url = url
-        if _ins_url:
-            self._ins_url = _ins_url
-        if _md_url:
-            self._md_url = _md_url
-        if _td_url:
-            self._td_url = _td_url
+        self._ins_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
+        self._md_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
+        self._td_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
         self._loop = asyncio.SelectorEventLoop() if loop is None else loop  # 创建一个新的 ioloop, 避免和其他框架/环境产生干扰
 
         # 初始化loop
@@ -257,20 +103,6 @@ class TqApi(object):
         self._security_prototype = self._gen_security_prototype() # 股票业务数据原型
         self._wait_timeout = False  # wait_update 是否触发超时
         self._dividend_cache = {}  # 缓存合约对应的复权系数矩阵，每个合约只计算一次
-
-        # slave模式的api不需要完整初始化流程
-        self._is_slave = isinstance(account, TqApi)
-        self._slaves = []
-        if self._is_slave:
-            self._master = account
-            if self._master._is_slave:
-                raise Exception("不可以为slave再创建slave")
-            self._master._slaves.append(self)
-            self._account = self._master._account
-            self._web_gui = False # 如果是slave, _web_gui 一定是 False
-            return  # 注: 如果是slave,则初始化到这里结束并返回,以下代码不执行
-
-        self._web_gui = web_gui
         # 初始化
         if sys.platform.startswith("win"):
             self.create_task(self._windows_patch())  # Windows系统下asyncio不支持KeyboardInterrupt的临时补丁
@@ -294,37 +126,12 @@ class TqApi(object):
         # 使用非空list,使得wait_update()能正确发送peek_message; 使用空dict, 使得is_changing()返回false, 因为截面数据不算做更新数据.
         self._diffs = [{}]
 
-        # 兼容旧版 tqsdk 所做的修改，来支持用户使用 for k,v in api._data.quotes.items() 类似的用法
-        if self._stock:
-            q, v = _query_for_init()
-            self.query_graphql(q, v, _generate_uuid("PYSDK_quote"))
-
     def _print(self, msg: str = "", level: str = "INFO"):
         if self.disable_print:
             return
         dt = "" if self._backtest else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         level = level if isinstance(level, str) else logging.getLevelName(level)
         print(f"{(dt + ' - ') if dt else ''}{level:>8} - {msg}")
-
-    @property
-    def _base_headers(self):
-        return self._auth._base_headers
-
-    # ----------------------------------------------------------------------
-    def copy(self) -> 'TqApi':
-        """
-        创建当前TqApi的一个副本. 这个副本可以在另一个线程中使用
-
-        Returns:
-            :py:class:`~tqsdk.api.TqApi`: 返回当前TqApi的一个副本. 这个副本可以在另一个线程中使用
-        """
-        slave_api = TqApi(self)
-        # 将当前api的_data值复制到_copy_diff中, 然后merge到副本api的_data里
-        _copy_diff = {}
-        TqApi._deep_copy_dict(self._data, _copy_diff)
-        slave_api._auth = self._auth
-        _merge_diff(slave_api._data, _copy_diff, slave_api._prototype, False)
-        return slave_api
 
     def close(self) -> None:
         """
@@ -409,7 +216,6 @@ class TqApi(object):
             return _get_obj(self._data, ["quotes", symbol], self._prototype["quotes"]["#"])
         else:
             self._ensure_symbol(symbol)
-            self._auth._has_md_grants(symbol)
             quote = _get_obj(self._data, ["quotes", symbol], self._prototype["quotes"]["#"])
             if symbol not in self._requests["quotes"]:
                 self._requests["quotes"].add(symbol)
@@ -1029,23 +835,6 @@ class TqApi(object):
             委托单1已成交: 0 手, 委托单2已成交: 3 手
             ...
 
-        Example5::
-
-            # 股票下单
-            from tqsdk import TqApi, TqAuth
-
-            account = TqAccount(broker_id="券商柜台", account_id="证券账户客户号", password="交易密码")
-            with TqApi(account=account, auth=TqAuth("信易账户", "账户密码")) as api:
-                order = api.insert_order(symbol="SSE.601456", direction="BUY", volume=100, limit_price=18.50)
-                while order.status != "FINISHED":
-                    api.wait_update()
-                    print("已成交: %d 股" % (order.volume_orign - order.volume_left))
-
-
-            # 预计的输出是这样的:
-            已成交: 100 股
-            ...
-
         """
         (exchange_id, instrument_id) = symbol.split(".", 1)
         if not self._account._check_valid(account):
@@ -1150,14 +939,6 @@ class TqApi(object):
             msg["limit_price"] = float(limit_price)
             msg["time_condition"] = "IOC" if advanced else "GFD"
         msg["volume_condition"] = "ALL" if advanced == "FOK" else "ANY"
-
-        # 股票交易下单 offset、volume_condition、time_condition、hedge_flag、contingent_condition 为 UNKNOWN
-        if exchange_id in ["SSE", "SZSE"] and quote['ins_class'] == 'STOCK':
-            msg["offset"] = "UNKNOWN"
-            msg["hedge_flag"] = "UNKNOWN"
-            msg["contingent_condition"] = "UNKNOWN"
-            msg["volume_condition"] = "UNKNOWN"
-            msg["time_condition"] = "UNKNOWN"
 
         return msg
 
@@ -1930,72 +1711,6 @@ class TqApi(object):
                 registing_objs.append(o)
         return _register_update_chan(registing_objs, chan)
 
-    # ----------------------------------------------------------------------
-    def query_graphql(self, query: str, variables: dict, query_id: Optional[str] = None):
-        """
-        发送基于 GraphQL 的合约服务请求查询，在同步代码中返回查询结果；异步代码中返回查询结果的引用地址。
-
-        Args:
-            query (str): [必填] 查询语句
-
-            variables (dict): [必填] 查询语句对应的参数取值
-
-            query_id (str): [可选] 查询请求 id
-
-        Returns:
-            :py:class:`~tqsdk.entity.Entity`: 返回查询结果的对象引用。
-                其的结构为 {query: "", variables: {}, result: {}}
-                query 和 variables 为发送请求时传入的参数，result 为查询结果
-
-        Example::
-
-            # 查询 "SHFE.au2012" 对应的全部期权
-            from tqsdk import TqApi, TqAuth
-
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            variables = {
-                "derivative_class": "OPTION",
-                "underlying_symbol": "SHFE.au2012"
-            }
-            query = '''
-                    query($derivative_class:Class, $underlying_symbol:String){
-                        symbol_info(instrument_id:$underlying_symbol){
-                            ... on basic { instrument_id
-                                derivative (class: $derivative_class) {
-                                    edges { node { ... on basic{ instrument_id}} }
-                                }
-                            }
-                        }
-                    }
-                    '''
-            res = api.query_graphql(query, variables)
-            print(res["result"])
-        """
-        if self._stock is False:
-            raise Exception("不支持（_stock is False）当前接口调用")
-        pack = {
-            "query": query,
-            "variables": variables
-        }
-        symbols = _get_obj(self._data, ["symbols"])
-        for symbol_query in symbols.values():
-            if symbol_query.items() >= pack.items():  # 检查是否发送过相同的请求
-                return symbol_query
-
-        query_id = _generate_uuid("PYSDK_api") if query_id is None else query_id
-        self._send_pack({
-            "aid": "ins_query",
-            "query_id": query_id,
-            "query": query,
-            "variables": variables
-        })
-        deadline = time.time() + 30
-        if not self._loop.is_running():
-            while query_id not in symbols:
-                if not self.wait_update(deadline=deadline):
-                    raise Exception("查询合约服务 %s 超时，请检查客户端及网络是否正常 %s" % (query, query_id))
-        return _get_obj(self._data, ["symbols", query_id])
-
     def query_quotes(self, ins_class: str = None, exchange_id: str = None, product_id: str = None, expired: bool = None,
                      has_night: bool = None) -> List[str]:
         """
@@ -2240,130 +1955,6 @@ class TqApi(object):
                     options.append(option["instrument_id"])
         return options
 
-    def query_atm_options(self, underlying_symbol, underlying_price, price_level, option_class, exercise_year: int = None,
-                         exercise_month: int = None, has_A: bool = None):
-        """
-        Args:
-            underlying_symbol (str): [必填] 标的合约 （目前每个标的只对应一个交易所的期权）
-
-            underlying_price (float): [必填] 标的价格，该价格用户输入可以是任意值，例如合约最新价，最高价，开盘价等然后以该值去对比实值/虚值/平值期权
-
-            price_level (int / list[int]): [必填] 实值/平值/虚值档位，支持用户输入 3,2,1,0,-1,-2,-3 分别代表实值3档，实值2档，实值1档，平值期权，虚值1档，虚值2档，虚值3档
-
-            option_class (str): [必填] 期权类型
-                * CALL: 看涨期权
-                * PUL: 看跌期权
-
-            exercise_year (str): [ETF 期权、股指期权必填] 期权最后行权日年份
-
-            exercise_month (str): [ETF 期权、股指期权必填] 期权最后行权日月份
-
-            has_A (bool): [可选] 是否含有 A，默认为 None
-
-        return:
-            返回一个列表类型对象
-
-        Example1::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SHFE.au2012", quote.last_price, 0, "CALL")
-            # 预计输出的为以au2012现在最新价来比对的认购的平值期权，当没有符合的平值期权时返回为空
-            ["SHFE.au2012C30000"]
-
-        Example2::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SHFE.au2012", quote.open, [3,2,1], "CALL")
-            # 预计输出的为au2012，以开盘价来比对的认购的实值3档，实值2档，实值1档期权，如果没有符合要求的期权则对应栏返回为None，如果有则返回格式例如
-            [None,None,"SHFE.au2012C30000"]
-
-        Example3::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SHFE.au2012", quote.open, [1,0,-1], "CALL")
-            # 预计输出的为au2012，以开盘价来比对的认购的实值1档，平值期权，虚值1档，如果没有符合要求的期权则对应栏返回为None，如果有则返回格式例如
-            ["SHFE.au2012C20000","SHFE.au2012C25000","SHFE.au2012C30000"]
-
-        Example4::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SHFE.au2012", quote.last_price, -1, "CALL")
-            # 预计输出的为au2012，以现在最新价来比对的认购的虚值1档期权
-
-        Example5::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SSE.000300", quote.last_price, -1, "CALL", exercise_year=2020, exercise_month=12)
-            # 预计输出沪深300股指期权,2020年12月的虚值1档期权
-
-        Example6::
-
-            from tqsdk import TqApi, TqAuth
-            api = TqApi(auth=TqAuth("信易账户", "账户密码"))
-            ls = api.query_atm_option("SSE.510300", quote.last_price, -1, "CALL", exercise_year=2020, exercise_month=12)
-            # 预计输出 上交所 沪深300股指ETF期权,2020年12月的虚值1档期权
-        """
-        price_level = price_level if type(price_level) is list else [price_level]
-        for pl in price_level:
-            if pl not in [-3, -2, -1, 0, 1, 2, 3]:
-                raise Exception("price_level 必须为 -3 ~ 3 之间的整数")
-        if option_class not in ['CALL', 'PUT']:
-            raise Exception("option_class 参数错误，option_class 必须是 'CALL' 或者 'PUT'")
-        if exercise_year and exercise_month and not (isinstance(exercise_year, int) and isinstance(exercise_month, int)):
-            raise Exception("exercise_year / exercise_month 类型错误")
-        if self._stock is False or self._loop.is_running():
-            raise Exception("不支持（_stock is False 或者在协程中）当前接口调用")
-        variables = {
-            "derivative_class": "OPTION",
-            "underlying_symbol": underlying_symbol
-        }
-        query = """
-                query($derivative_class:Class, $underlying_symbol:String){
-                    symbol_info(instrument_id:$underlying_symbol){ 
-                        ... on basic { instrument_id
-                            derivative (class: $derivative_class) { 
-                                edges {
-                                    node {
-                                        ... on basic{ class instrument_id exchange_id english_name}
-                                        ... on option{ expired expire_datetime last_exercise_datetime strike_price call_or_put}
-                                    }
-                                }
-                            } 
-                        } 
-                    } 
-                }
-                """
-        query_result = self.query_graphql(query, variables)
-        options = []
-        for quote in query_result.get("result", {}).get("symbol_info", []):
-            if quote.get("derivative"):
-                for edge in quote["derivative"]["edges"]:
-                    option = edge["node"]
-                    if option["call_or_put"] != option_class \
-                            or (exercise_year and datetime.fromtimestamp(option["last_exercise_datetime"] / 1e9).year != exercise_year) \
-                            or (exercise_month and datetime.fromtimestamp(option["last_exercise_datetime"] / 1e9).month != exercise_month) \
-                            or (has_A is True and option["english_name"].count('A') == 0)\
-                            or (has_A is False and option["english_name"].count('A') > 0):
-                        continue
-                    options.append(option)
-        options.sort(key=lambda x: x['strike_price'], reverse=option_class=="PUT")  # 按照行权价排序, 实值在前虚值在后
-        diff_price = [abs(underlying_price - o['strike_price']) for o in options]
-        min_diff_price = min(diff_price)
-        option_0_index = diff_price.index(min_diff_price) + diff_price.count(min_diff_price) // 2
-        rst_options = []
-        for pl in price_level:
-            option_index = option_0_index - pl
-            if 0 <= option_index < len(options):
-                rst_options.append(options[option_index]["instrument_id"])
-            else:
-                rst_options.append(None)
-        return rst_options
-
     # ----------------------------------------------------------------------
     def _call_soon(self, org_call_soon, callback, *args, **kargs):
         """ioloop.call_soon的补丁, 用来追踪是否有任务完成并等待执行"""
@@ -2389,20 +1980,6 @@ class TqApi(object):
         self._logger.debug("process start", product="tqsdk-python", version=__version__, os=platform.platform(),
                            py_version=platform.python_version(), py_arch=platform.architecture()[0],
                            cmd=sys.argv, mem_total=mem.total, mem_free=mem.free)
-        if self._auth is None:
-            raise Exception("请输入 auth （信易账户）参数，信易账户是使用 tqsdk 的前提，如果没有请点击注册，注册地址：https://account.shinnytech.com/。")
-        else:
-            self._auth.login()  # tqwebhelper 有可能会设置 self._auth
-
-        # 等待复盘服务器启动
-        if isinstance(self._backtest, TqReplay):
-            sim = None  # 复盘时如果用户传入的 TqSim 实例，则使用用户传入的参数
-            for acc in self._account._account_list:
-                if isinstance(acc, TqSim):
-                    sim = acc
-                    break
-            self._account = TqMultiAccount([sim if sim else TqSim()])
-            self._ins_url, self._md_url = self._backtest._create_server(self)
 
         # 连接合约和行情服务器
         if self._md_url is None:
@@ -2410,32 +1987,13 @@ class TqApi(object):
         md_logger = ShinnyLoggerAdapter(self._logger.getChild("TqConnect"), url=self._md_url)
         ws_md_send_chan = TqChan(self, chan_name="send to md", logger=md_logger)
         ws_md_recv_chan = TqChan(self, chan_name="recv from md", logger=md_logger)
-
-        if self._stock is False:  # self._stock == False 需要旧版的合约服务文件
-            quotes = self._fetch_symbol_info(self._ins_url)
-            if isinstance(self._backtest, TqBacktest):
-                _quotes_add_night(quotes)
-            ws_md_recv_chan.send_nowait({
-                "aid": "rtn_data",
-                "data": [{
-                    "quotes": quotes
-                }]
-            })  # 获取合约信息
-        else:  # todo: self._stock == True 新版合约服务没有已下市合约
-            quotes = self._fetch_symbol_info(os.getenv("TQ_INS_URL", "https://openmd.shinnytech.com/t/md/symbols/2020-09-15.json"))
-            if isinstance(self._backtest, TqBacktest):
-                _quotes_add_night(quotes)
-            ws_md_recv_chan.send_nowait({
-                "aid": "rtn_data",
-                "data": [{
-                    "quotes": {k: v for k, v in quotes.items() if v["expired"] is True}
-                }]
-            })  # 获取合约信息
-        # 期权增加了 exercise_year、exercise_month 在旧版合约服务中没有，需要添加，使用下市日期代替最后行权日
-        for quote in quotes.values():
-            if quote["ins_class"] == "FUTURE_OPTION":
-                quote["exercise_year"] = datetime.fromtimestamp(quote["expire_datetime"]).year
-                quote["exercise_month"] = datetime.fromtimestamp(quote["expire_datetime"]).month
+        quotes = self._fetch_symbol_info(os.getenv("TQ_INS_URL", "https://openmd.shinnytech.com/t/md/symbols/2020-09-15.json"))
+        ws_md_recv_chan.send_nowait({
+            "aid": "rtn_data",
+            "data": [{
+                "quotes": {k: v for k, v in quotes.items() if v["expired"] is True}
+            }]
+        })  # 获取合约信息
 
         conn = TqConnect(md_logger)
         self.create_task(conn._run(self, self._md_url, ws_md_send_chan, ws_md_recv_chan))
@@ -2447,39 +2005,8 @@ class TqApi(object):
         self.create_task(md_reconnect._run(self, api_send_chan, api_recv_chan, ws_md_send_chan, ws_md_recv_chan))
         ws_md_send_chan, ws_md_recv_chan = api_send_chan, api_recv_chan
 
-        # 复盘模式，定时发送心跳包, 并将复盘日期发在行情的 recv_chan
-        if isinstance(self._backtest, TqReplay):
-            ws_md_recv_chan.send_nowait({
-                "aid": "rtn_data",
-                "data": [{
-                    "_tqsdk_replay": {
-                        "replay_dt": int(datetime.combine(self._backtest._replay_dt, datetime.min.time()).timestamp() * 1e9)}
-                }]
-            })
-            self.create_task(self._backtest._run())
-
-        # 如果处于回测模式，则将行情连接对接到 backtest 上
-        if isinstance(self._backtest, TqBacktest):
-            bt_logger = ShinnyLoggerAdapter(self._logger.getChild("TqBacktest"))
-            bt_send_chan = TqChan(self, chan_name="send to backtest", logger=bt_logger)
-            bt_recv_chan = TqChan(self, chan_name="recv from backtest", logger=bt_logger)
-            self.create_task(self._backtest._run(self, bt_send_chan, bt_recv_chan, ws_md_send_chan, ws_md_recv_chan))
-            ws_md_send_chan, ws_md_recv_chan = bt_send_chan, bt_recv_chan
-
         # 启动账户实例并连接交易服务器
         self._account._run(self, self._send_chan, self._recv_chan, ws_md_send_chan, ws_md_recv_chan)
-
-        # 与 web 配合, 在 tq_web_helper 内部中处理 web_gui 选项
-        web_send_chan, web_recv_chan = TqChan(self), TqChan(self)
-        self.create_task(tq_web_helper._run(web_send_chan, web_recv_chan, self._send_chan, self._recv_chan))
-        self._send_chan, self._recv_chan = web_send_chan, web_recv_chan
-
-        # 股票盈亏计算
-        if self._account._has_stock_account:
-            stock_profit_helper = TqStockProfit(self)
-            stock_send_chan, stock_recv_chan = TqChan(self), TqChan(self)
-            self.create_task(stock_profit_helper._run(stock_send_chan, stock_recv_chan, self._send_chan, self._recv_chan))
-            self._send_chan, self._recv_chan = stock_send_chan, stock_recv_chan
 
         # 发送第一个peek_message,因为只有当收到上游数据包时wait_update()才会发送peek_message
         self._send_chan.send_nowait({
@@ -2774,55 +2301,6 @@ class TqApi(object):
                                              int(serial["array"][-1, 1]) + 1, data)
         serial["update_row"] = serial["width"]
 
-    def _process_chart_data_for_web(self, serial, symbol, duration, col, count, right, data):
-        # 与 _process_chart_data 函数功能类似，但是处理成符合 diff 协议的序列，在 js 端就不需要特殊处理了
-        if not data:
-            return
-        if ".open" in data:
-            data_type = "KSERIAL"
-        elif ".type" in data:
-            data_type = data[".type"]
-            rows = np.where(np.not_equal(data_type, None))[0]
-            if len(rows) == 0:
-                return
-            data_type = data_type[rows[0]]
-        else:
-            data_type = "LINE"
-        send_data = {
-            "type": "KSERIAL" if data_type == "KSERIAL" else "SERIAL",
-            "range_left": right - count,
-            "range_right": right - 1,
-            "data": {}
-        }
-        # 在执行 _update_serial_single 时，有可能将未赋值的字段设置为 None, 这里如果为 None 则不发送这个 board 字段，
-        # 因为 None 在 diff 协议中的含义是删除这个字段，这里仅仅表示不赋新值，下面的 color, width 同理
-        board = data.get(".board", ["MAIN"])[-1]
-        if board:
-            send_data["board"] = data.get(".board", ["MAIN"])[-1]
-        if data_type in {"LINE", "DOT", "DASH", "BAR"}:
-            send_data["style"] = data_type
-            color = data.get(".color", ["#FF0000"])[-1]
-            if color:
-                send_data["color"] = color if isinstance(color, str) else int(color)
-            width = int(data.get(".width", [1])[-1])
-            if width:
-                send_data["width"] = int(data.get(".width", [1])[-1])
-            for i in range(count):
-                send_data["data"][i + right - count] = {
-                    # 数据结构与 KSERIAL 保持一致，只有一列的时候，默认 key 值取 "value"
-                    "value": data[""][i]
-                }
-            self._send_series_data(symbol, duration, col, send_data, aid="set_chart_data")
-        elif data_type == "KSERIAL":
-            for i in range(count):
-                send_data["data"][i + right - count] = {
-                    "open": data[".open"][i],
-                    "high": data[".high"][i],
-                    "low": data[".low"][i],
-                    "close": data[".close"][i]
-                }
-            self._send_series_data(symbol, duration, col, send_data, aid="set_chart_data")
-
     def _send_series_data(self, symbol, duration, serial_id, serial_data, aid="set_chart_data"):
         pack = {
             "aid": aid,
@@ -3021,145 +2499,6 @@ class TqApi(object):
         else:
             self._master._slave_send_pack(pack)
 
-    def draw_text(self, base_k_dataframe: pd.DataFrame, text: str, x: Optional[int] = None, y: Optional[float] = None,
-                  id: Optional[str] = None, board: str = "MAIN", color: Union[str, int] = "red") -> None:
-        """
-        配合天勤使用时, 在天勤的行情图上绘制一个字符串
-
-        Args:
-            base_k_dataframe (pandas.DataFrame): 基础K线数据序列, 要绘制的K线将出现在这个K线图上. 需要画图的数据以附加列的形式存在
-
-            text (str): 要显示的字符串
-
-            x (int): X 坐标, 以K线的序列号表示. 可选, 缺省为对齐最后一根K线,
-
-            y (float): Y 坐标. 可选, 缺省为最后一根K线收盘价
-
-            id (str): 字符串ID, 可选. 以相同ID多次调用本函数, 后一次调用将覆盖前一次调用的效果
-
-            board (str): 选择图板, 可选, 缺省为 "MAIN" 表示绘制在主图
-
-            color (str/int): 文本颜色, 可选, 缺省为 "red"
-                * str : 符合 CSS Color 命名规则的字符串, 例如: "red", "#FF0000", "#FF0000FF", "rgb(255, 0, 0)", "rgba(255, 0, 0, .5)"
-                * int : 十六进制整数表示颜色, ARGB, 例如: 0xffff0000
-
-        Example::
-
-            # 在主图最近K线的最低处标一个"最低"文字
-            klines = api.get_kline_serial("SHFE.cu1905", 86400)
-            indic = np.where(klines.low == klines.low.min())[0]
-            value = klines.low.min()
-            api.draw_text(klines, "测试413423", x=indic, y=value, color=0xFF00FF00)
-        """
-        if id is None:
-            id = _generate_uuid()
-        if y is None:
-            y = base_k_dataframe["close"].iloc[-1]
-        serial = {
-            "type": "TEXT",
-            "x1": self._offset_to_x(base_k_dataframe, x),
-            "y1": y,
-            "text": text,
-            "color": color,
-            "board": board,
-        }
-        self._send_chart_data(base_k_dataframe, id, serial)
-
-    def draw_line(self, base_k_dataframe: pd.DataFrame, x1: int, y1: float, x2: int, y2: float,
-                  id: Optional[str] = None, board: str = "MAIN", line_type: str = "LINE", color: Union[str, int] = "red",
-                  width: int = 1) -> None:
-        """
-        配合天勤使用时, 在天勤的行情图上绘制一个直线/线段/射线
-
-        Args:
-            base_k_dataframe (pandas.DataFrame): 基础K线数据序列, 要绘制的K线将出现在这个K线图上. 需要画图的数据以附加列的形式存在
-
-            x1 (int): 第一个点的 X 坐标, 以K线的序列号表示
-
-            y1 (float): 第一个点的 Y 坐标
-
-            x2 (int): 第二个点的 X 坐标, 以K线的序列号表示
-
-            y2 (float): 第二个点的 Y 坐标
-
-            id (str): 字符串ID, 可选. 以相同ID多次调用本函数, 后一次调用将覆盖前一次调用的效果
-
-            board (str): 选择图板, 可选, 缺省为 "MAIN" 表示绘制在主图
-
-            line_type ("LINE" | "SEG" | "RAY"): 画线类型, 可选, 默认为 LINE. LINE=直线, SEG=线段, RAY=射线
-
-            color (str/int): 线颜色, 可选, 缺省为 "red"
-                * str : 符合 CSS Color 命名规则的字符串, 例如: "red", "#FF0000", "#FF0000FF", "rgb(255, 0, 0)", "rgba(255, 0, 0, .5)"
-                * int : 十六进制整数表示颜色, ARGB, 例如: 0xffff0000
-
-            width (int): 线宽度, 可选, 缺省为 1
-        """
-        if id is None:
-            id = _generate_uuid()
-        serial = {
-            "type": line_type,
-            "x1": self._offset_to_x(base_k_dataframe, x1),
-            "y1": y1,
-            "x2": self._offset_to_x(base_k_dataframe, x2),
-            "y2": y2,
-            "color": color,
-            "width": width,
-            "board": board,
-        }
-        self._send_chart_data(base_k_dataframe, id, serial)
-
-    def draw_box(self, base_k_dataframe: pd.DataFrame, x1: int, y1: float, x2: int, y2: float, id: Optional[str] = None,
-                 board: str = "MAIN", bg_color: Union[str, int] = "black", color: Union[str, int] = "red", width: int = 1) -> None:
-        """
-        配合天勤使用时, 在天勤的行情图上绘制一个矩形
-
-        Args:
-            base_k_dataframe (pandas.DataFrame): 基础K线数据序列, 要绘制的K线将出现在这个K线图上. 需要画图的数据以附加列的形式存在
-
-            x1 (int): 矩形左上角的 X 坐标, 以K线的序列号表示
-
-            y1 (float): 矩形左上角的 Y 坐标
-
-            x2 (int): 矩形右下角的 X 坐标, 以K线的序列号表示
-
-            y2 (float): 矩形右下角的 Y 坐标
-
-            id (str): ID, 可选. 以相同ID多次调用本函数, 后一次调用将覆盖前一次调用的效果
-
-            board (str): 选择图板, 可选, 缺省为 "MAIN" 表示绘制在主图
-
-            bg_color (str/int): 填充颜色, 可选, 缺省为 "black"
-                * str : 符合 CSS Color 命名规则的字符串, 例如: "red", "#FF0000", "#FF0000FF", "rgb(255, 0, 0)", "rgba(255, 0, 0, .5)"
-                * int : 十六进制整数表示颜色, ARGB, 例如: 0xffff0000
-
-            color (str/int): 边框颜色, 可选, 缺省为 "red"
-                * str : 符合 CSS Color 命名规则的字符串, 例如: "red", "#FF0000", "#FF0000FF", "rgb(255, 0, 0)", "rgba(255, 0, 0, .5)"
-                * int : 十六进制整数表示颜色, ARGB, 例如: 0xffff0000
-
-            width (int): 边框宽度, 可选, 缺省为 1
-
-        Example::
-
-            # 给主图最后5根K线加一个方框
-            klines = api.get_kline_serial("SHFE.cu1905", 86400)
-            api.draw_box(klines, x1=-5, y1=klines.iloc[-5].close, x2=-1, \
-            y2=klines.iloc[-1].close, width=1, color=0xFF0000FF, bg_color=0x8000FF00)
-        """
-        if id is None:
-            id = _generate_uuid()
-        serial = {
-            "type": "BOX",
-            "x1": self._offset_to_x(base_k_dataframe, x1),
-            "y1": y1,
-            "x2": self._offset_to_x(base_k_dataframe, x2),
-            "y2": y2,
-            "bg_color": bg_color,
-            "color": color,
-            "width": width,
-            "board": board,
-        }
-        self._send_chart_data(base_k_dataframe, id, serial)
-
     def _send_chart_data(self, base_kserial_frame, serial_id, serial_data):
         s = self._serials[id(base_kserial_frame)]
         p = s["root"][0]["_path"]
@@ -3188,6 +2527,3 @@ class TqApi(object):
         if isinstance(self._backtest, TqBacktest):
             _quotes_add_night(quotes)
         return quotes
-
-
-print("在使用天勤量化之前，默认您已经知晓并同意以下免责条款，如果不同意请立即停止使用：https://www.shinnytech.com/blog/disclaimer/", file=sys.stderr)

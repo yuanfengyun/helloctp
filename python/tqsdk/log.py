@@ -6,13 +6,13 @@ import datetime
 import os
 
 
-DEBUG_DIR = os.path.join(os.path.expanduser('~'), ".tqsdk/logs")
+DEBUG_DIR = os.path.join(os.path.expanduser('./'), ".tqsdk/logs")
 
 
 def _get_log_name():
     """返回默认 debug 文件生成的位置"""
     if not os.path.exists(DEBUG_DIR):
-        os.makedirs(os.path.join(os.path.expanduser('~'), ".tqsdk/logs"), exist_ok=True)
+        os.makedirs(DEBUG_DIR, exist_ok=True)
     return os.path.join(DEBUG_DIR, f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}-{os.getpid()}.log")
 
 

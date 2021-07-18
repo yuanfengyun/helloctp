@@ -24,6 +24,7 @@ class TqAccount(object):
         self._password = password
         self._app_id = "SHINNY_TQ_1.0"
         self._system_info = ""
+        self._td_inited = False
 
     def _get_system_info(self):
         try:
@@ -126,6 +127,7 @@ class TqAccount(object):
                     slice_item["trade"][self._account_key] = slice_item["trade"].pop(self._account_id)
             if pack["aid"] == "rtn_data":
                 self._diffs.extend(pack.get('data', []))
+                self._td_inited = True
             else:
                 await api_recv_chan.send(pack)
             await td_send_chan.send({

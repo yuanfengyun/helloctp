@@ -60,9 +60,20 @@ class TqApi(object):
         # 初始化 logger
         self._logger = logging.getLogger("TqApi")
         self._logger.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(filename=_get_log_name())
+        fh.setFormatter(JSONFormatter())
+        fh.setLevel(logging.DEBUG)
+        sh = logging.StreamHandler()#往屏幕上输出
+        sh.setFormatter(JSONFormatter())
+        sh.setLevel(logging.DEBUG)
+        self._logger.addHandler(sh)
         self.disable_print = False
 
-        self._debug = True  # 日志选项
+        logger = logging.getLogger('websockets')
+        logger.setLevel(logging.DEBUG)
+
+        logger.addHandler(sh)
+
         self._account = account
         self._ins_url = "https://openmd.shinnytech.com/t/md/symbols/latest.json"
         self._md_url = "wss://free-openmd.shinnytech.com/t/md/front/mobile"
@@ -112,12 +123,9 @@ class TqApi(object):
         deadline = time.time() + 60
         try:
             # 多账户时，所有账户需要初始化完成
-            trade_more_data = True
-            while self._data.get("mdhis_more_data", True) or trade_more_data:
+            while self._account._td_inited == False:
                 if not self.wait_update(deadline=deadline):  # 等待连接成功并收取截面数据
                     raise Exception("接收数据超时，请检查客户端及网络是否正常")
-
-                trade_more_data = self._account._get_trade_more_data_and_order_id(self, self._data)
         except:
             self.close()
             raise
@@ -1961,23 +1969,12 @@ class TqApi(object):
 
     def _setup_connection(self):
         """初始化"""
-        # TqWebHelper 初始化可能会修改 self._account、self._backtest，所以在这里才初始化 logger
-        # 在此之前使用 self._logger 不会打印日志
-        if not self._logger.handlers and (self._debug or
-                                          (self._account._has_tq_account and self._debug is not False )):
-            log_name = self._debug if isinstance(self._debug, str) else _get_log_name()
-            fh = logging.FileHandler(filename=log_name)
-            fh.setFormatter(JSONFormatter())
-            fh.setLevel(logging.DEBUG)
-            self._logger.addHandler(fh)
         mem = psutil.virtual_memory()
         self._logger.debug("process start", product="tqsdk-python", version=__version__, os=platform.platform(),
                            py_version=platform.python_version(), py_arch=platform.architecture()[0],
                            cmd=sys.argv, mem_total=mem.total, mem_free=mem.free)
 
         # 连接合约和行情服务器
-        if self._md_url is None:
-            self._md_url = self._auth._get_md_url(self._stock)  # 如果用户未指定行情地址，则使用名称服务获取行情地址
         md_logger = ShinnyLoggerAdapter(self._logger.getChild("TqConnect"), url=self._md_url)
         ws_md_send_chan = TqChan(self, chan_name="send to md", logger=md_logger)
         ws_md_recv_chan = TqChan(self, chan_name="recv from md", logger=md_logger)
@@ -1999,8 +1996,14 @@ class TqApi(object):
         self.create_task(md_reconnect._run(self, api_send_chan, api_recv_chan, ws_md_send_chan, ws_md_recv_chan))
         ws_md_send_chan, ws_md_recv_chan = api_send_chan, api_recv_chan
 
+        td_logger = ShinnyLoggerAdapter(self._logger.getChild("TqConnect"), url=self._td_url)
+        conn = TqConnect(td_logger)
+        ws_td_send_chan = TqChan(self, chan_name="send to td", logger=td_logger)
+        ws_td_recv_chan = TqChan(self, chan_name="recv from td", logger=td_logger)
+        self.create_task(conn._run(self, self._td_url, ws_td_send_chan, ws_td_recv_chan))
+
         # 启动账户实例并连接交易服务器
-        await self._account._run(self, api_send_chan, api_recv_chan, self._send_chan, self._recv_chan, ws_md_send_chan, ws_md_recv_chan)
+        self.create_task(self._account._run(self, self._send_chan, self._recv_chan, ws_md_send_chan, ws_md_recv_chan, ws_td_send_chan, ws_td_recv_chan))
 
         # 发送第一个peek_message,因为只有当收到上游数据包时wait_update()才会发送peek_message
         self._send_chan.send_nowait({
@@ -2369,9 +2372,6 @@ class TqApi(object):
             pack = await self._recv_chan.recv()
             if pack is None:
                 return
-            if not self._is_slave:
-                for slave in self._slaves:
-                    slave._slave_recv_pack(copy.deepcopy(pack))
             self._pending_diffs.extend(pack.get("data", []))
 
     def _gen_prototype(self):

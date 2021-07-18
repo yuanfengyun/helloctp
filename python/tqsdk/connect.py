@@ -30,7 +30,6 @@ TqReconnectHandler
  api
 """
 
-
 class ReconnectTimer(object):
 
     def __init__(self):
@@ -65,7 +64,9 @@ class TqConnect(object):
         count = 0
         while True:
             try:
+                print("connect ",url)
                 async with websockets.connect(url, **self._keywords) as client:
+                    print("wss: connected:",url)
                     # 发送网络连接建立的通知，code = 2019112901
                     notify_id = _generate_uuid()
                     notify = {
@@ -107,6 +108,7 @@ class TqConnect(object):
             # 而这里的 except 又需要处理所有子函数及子函数的子函数等等可能抛出的例外, 因此这里只能遇到问题之后再补, 并且无法避免 false positive 和 false negative
             except (websockets.exceptions.ConnectionClosed, websockets.exceptions.InvalidStatusCode,
                     websockets.exceptions.InvalidState, websockets.exceptions.ProtocolError, OSError) as e:
+                print("wss except")
                 # 发送网络连接断开的通知，code = 2019112911
                 notify_id = _generate_uuid()
                 notify = {
@@ -126,6 +128,7 @@ class TqConnect(object):
                     }]
                 })
             finally:
+                print("wss close")
                 if self._first_connect:
                     self._first_connect = False
                 # 下次重连的时间距离现在当前时间秒数，会等待相应的时间，否则立即发起重连

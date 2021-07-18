@@ -18,16 +18,16 @@ def cls():
     else:
         os.system("cls")
 
-account = ""
-password = ""
+account = "432"
+password = "234"
 
-if len(sys.argv) >= 3:
-    account = sys.argv[1]
-    password = sys.argv[2]
-else:
-    import login
-    account = login.account
-    password = login.password
+#if len(sys.argv) >= 3:
+#    account = sys.argv[1]
+#    password = sys.argv[2]
+#else:
+#    import login
+#    account = login.account
+#    password = login.password
 
 api = TqApi(TqAccount(account, password))
 

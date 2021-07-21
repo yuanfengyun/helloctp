@@ -3,6 +3,7 @@
 #include "ThostFtdcTraderApi.h"
 #include "td_op.h"
 #include "config.h"
+#include "util.h"
 
 int request_id = 1;
 
@@ -55,24 +56,38 @@ void TdOp::ReqConfirmSettlement()
 // 查询持仓
 void TdOp::ReqQryInvestorPosition()
 {
-    CThostFtdcQryInvestorPositionField qrypositionfield = {0};
-    tdapi->ReqQryInvestorPosition(&qrypositionfield, 0);
+    CThostFtdcQryInvestorPositionField field = {0};
+	memset(&field, 0, sizeof(field));
+	strcpy(field.BrokerID,BrokerID.c_str());
+	strcpy(field.InvestorID, UserID.c_str());
+	
+    tdapi->ReqQryInvestorPosition(&field, 0);
 }
 
-void TdOp::ReqOrderInsert(string name,string dir,string offset,float price,int volume){
+int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,string volume){
+    if(!isFloat(price.c_str())) return -1;
+    if(!isInt(volume.c_str())) return -1;
+    int vol = atoi(volume.c_str());
+    if(vol <= 1) return -1;
 	CThostFtdcInputOrderField o ={0};
     strcpy(o.BrokerID, BrokerID.c_str());
 	strcpy(o.InvestorID, UserID.c_str());
 	strcpy(o.ExchangeID, "DCE");
 	strcpy(o.InstrumentID, name.c_str());
-	o.OrderPriceType = THOST_FTDC_OPT_LimitPrice;
     if(dir == "buy"){
 	    o.Direction = THOST_FTDC_D_Buy;
     }else if(dir == "sell"){
         o.Direction = THOST_FTDC_D_Sell;
     }
-	o.LimitPrice = price;
-	o.VolumeTotalOriginal = volume;    
+
+    if(price.length()==0){
+        o.LimitPrice = 0.0;
+        o.OrderPriceType = THOST_FTDC_OPT_AnyPrice;
+    }else{
+        o.LimitPrice = atof(price.c_str());
+	    o.OrderPriceType = THOST_FTDC_OPT_LimitPrice;
+    }
+	o.VolumeTotalOriginal = vol;
 	o.ContingentCondition = THOST_FTDC_CC_Immediately;
     if(offset == "open")
         o.CombOffsetFlag[0] = THOST_FTDC_OF_Open;

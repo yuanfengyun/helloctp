@@ -13,5 +13,6 @@ public:
 };
 
 enum MsgType{
-    msg_market_data = 1
+    msg_market_data = 1,
+    msg_position_data = 2
 };

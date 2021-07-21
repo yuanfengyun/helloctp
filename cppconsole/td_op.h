@@ -14,5 +14,5 @@ public:
 
     static void ReqQryInvestorPosition();
 
-    static void ReqOrderInsert(string name,string dir,string offset,float price,int volume);
+    static int ReqOrderInsert(string name,string dir,string offset,string price,string volume);
 };

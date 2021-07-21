@@ -12,16 +12,17 @@
 #include "mdspi.h"
 #include "tdspi.h"
 #include "util.h"
+#include "console.h"
 
 using namespace std;
 
 // test
-//char MD_FRONT[] = "tcp://180.168.146.187:10211";
-//char TD_FRONT[] = "tcp://180.168.146.187:10201";
+char MD_FRONT[] = "tcp://180.168.146.187:10212";
+char TD_FRONT[] = "tcp://180.168.146.187:10202";
 
 // 24
-char MD_FRONT[] = "tcp://180.168.146.187:10131";
-char TD_FRONT[] = "tcp://180.168.146.187:10130";
+//char MD_FRONT[] = "tcp://180.168.146.187:10131";
+//char TD_FRONT[] = "tcp://180.168.146.187:10130";
 
 string BrokerID = "9999";
 string UserID = "123616";
@@ -72,41 +73,6 @@ void* td_thread(void*)
     tdapi->Init();
 
     tdapi->Join();
-}
-
-std::map<string,CThostFtdcDepthMarketDataField*> market_datas;
-
-void* handle_msg(Msg* msg)
-{
-    if(msg->id == msg_market_data){
-        CThostFtdcDepthMarketDataField* p = (CThostFtdcDepthMarketDataField*)msg->ptr;
-        string ins = string(p->InstrumentID);
-        auto it = market_datas.find(ins);
-        if(it!=market_datas.end()){
-            delete it->second;
-        }
-        market_datas[ins] = p;
-        //printf("data haha\n");
-    }
-}
-
-void handle_cmd(char* cmd)
-{
-    string scmd(cmd);
-    std::vector<std::string> array = splitWithStl(scmd," ");
-    std::string c = array[0];
-    if(c.compare("show") || c.compare("s")==0){
-        for(auto it=market_datas.begin();it!=market_datas.end();++it)
-        {
-            printf("%s\t%d %d\t%d %d\t%d\n",
-                 it->second->InstrumentID,
-                 int(it->second->BidPrice1),
-                 int(it->second->AskPrice1),
-                 int(it->second->HighestPrice),
-                 int(it->second->LowestPrice),
-                 int(it->second->OpenInterest - it->second->PreOpenInterest));
-        }
-    }
 }
 
 void* main_thread(void*)

@@ -54,7 +54,7 @@ void MdSpi::OnRspError(CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bI
 ///订阅行情应答
 void MdSpi::OnRspSubMarketData(CThostFtdcSpecificInstrumentField *pSpecificInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    printf("MdSpi::OnRspSubMarketData \n");
+    //printf("MdSpi::OnRspSubMarketData \n");
 }
 
 ///取消订阅行情应答

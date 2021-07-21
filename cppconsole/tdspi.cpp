@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <cstring>
+#include <fcntl.h>
+#include <string.h>
+#include <unistd.h>
 #include "tdspi.h"
 #include "td_op.h"
 #include "util.h"
-
+#include "msg.h"
 
 void print_error(char* msg)
 {
@@ -42,16 +45,22 @@ void TdSpi::OnHeartBeatWarning(int nTimeLapse)
 ///客户端认证响应
 void TdSpi::OnRspAuthenticate(CThostFtdcRspAuthenticateField *pRspAuthenticateField, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(pRspInfo->ErrorID !=0){
+        print_error(pRspInfo->ErrorMsg);
+        return;
+    }
     TdOp::ReqUserLogin();
-    print_error(pRspInfo->ErrorMsg);
 }
 
 
 ///登录请求响应
 void TdSpi::OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    printf("td OnRspUserLogin,error=%d msg=%s\n",pRspInfo->ErrorID,pRspInfo->ErrorMsg);
-    print_error(pRspInfo->ErrorMsg);
+    if(pRspInfo->ErrorID != 0){
+        printf("td OnRspUserLogin,error=%d msg=%s\n",pRspInfo->ErrorID,pRspInfo->ErrorMsg);
+        print_error(pRspInfo->ErrorMsg);
+        return;
+    }
     TdOp::ReqQryInvestorPosition();
 }
 
@@ -163,7 +172,18 @@ void TdSpi::OnRspQryTrade(CThostFtdcTradeField *pTrade, CThostFtdcRspInfoField *
 ///请求查询投资者持仓响应
 void TdSpi::OnRspQryInvestorPosition(CThostFtdcInvestorPositionField *pInvestorPosition, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(pRspInfo != NULL && pRspInfo->ErrorID!=0){
+        printf("td positions:\n");
+        print_error(pRspInfo->ErrorMsg);
+        return;
+    }
+    if(pInvestorPosition == NULL) return;
+
     printf("td positions:\n");
+    auto p = new CThostFtdcInvestorPositionField;
+    memcpy(p,pInvestorPosition,sizeof(CThostFtdcInvestorPositionField));
+    Msg msg(msg_position_data,p);
+    write(pipe_fd,&msg,sizeof(msg));
 }
 
 ///请求查询资金账户响应

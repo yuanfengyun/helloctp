@@ -8,12 +8,21 @@
 #include "util.h"
 #include "msg.h"
 
-void print_error(char* msg)
+bool check_error(CThostFtdcRspInfoField *pRspInfo)
 {
+    if(pRspInfo == NULL) return false;
+
+    if(pRspInfo->ErrorID == 0){
+        return true;
+   }
+ 
     char buf[256];
     memset(buf,0,sizeof(256));
+
+    char* msg = pRspInfo->ErrorMsg;
     GbkToUtf8(msg,strlen(msg),buf,256);
     printf("%s \n",buf);
+    return false;
 }
 
 ///当客户端与交易后台建立起通信连接时（还未登录前），该方法被调用。
@@ -45,8 +54,7 @@ void TdSpi::OnHeartBeatWarning(int nTimeLapse)
 ///客户端认证响应
 void TdSpi::OnRspAuthenticate(CThostFtdcRspAuthenticateField *pRspAuthenticateField, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    if(pRspInfo->ErrorID !=0){
-        print_error(pRspInfo->ErrorMsg);
+    if(!check_error(pRspInfo)){
         return;
     }
     TdOp::ReqUserLogin();
@@ -56,11 +64,11 @@ void TdSpi::OnRspAuthenticate(CThostFtdcRspAuthenticateField *pRspAuthenticateFi
 ///登录请求响应
 void TdSpi::OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    if(pRspInfo->ErrorID != 0){
-        printf("td OnRspUserLogin,error=%d msg=%s\n",pRspInfo->ErrorID,pRspInfo->ErrorMsg);
-        print_error(pRspInfo->ErrorMsg);
+    if(!check_error(pRspInfo)){
         return;
     }
+
+    TdOp::ReqConfirmSettlement();
     TdOp::ReqQryInvestorPosition();
 }
 
@@ -82,11 +90,19 @@ void TdSpi::OnRspTradingAccountPasswordUpdate(CThostFtdcTradingAccountPasswordUp
 ///报单录入请求响应
 void TdSpi::OnRspOrderInsert(CThostFtdcInputOrderField *pInputOrder, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(!check_error(pRspInfo)){
+        printf("OnRspOrderInsert\n");
+        return;
+    }
+    printf("OnRspOrderInsert\n");
 }
 
 ///预埋单录入请求响应
 void TdSpi::OnRspParkedOrderInsert(CThostFtdcParkedOrderField *pParkedOrder, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(!check_error(pRspInfo)){
+        return;
+    }
 }
 
 ///预埋撤单录入请求响应
@@ -172,14 +188,12 @@ void TdSpi::OnRspQryTrade(CThostFtdcTradeField *pTrade, CThostFtdcRspInfoField *
 ///请求查询投资者持仓响应
 void TdSpi::OnRspQryInvestorPosition(CThostFtdcInvestorPositionField *pInvestorPosition, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    if(pRspInfo != NULL && pRspInfo->ErrorID!=0){
-        printf("td positions:\n");
-        print_error(pRspInfo->ErrorMsg);
-        return;
-    }
     if(pInvestorPosition == NULL) return;
 
-    printf("td positions:\n");
+    if(pRspInfo && !check_error(pRspInfo)){
+        return;
+    }
+
     auto p = new CThostFtdcInvestorPositionField;
     memcpy(p,pInvestorPosition,sizeof(CThostFtdcInvestorPositionField));
     Msg msg(msg_position_data,p);
@@ -244,6 +258,12 @@ void TdSpi::OnRspQryTransferBank(CThostFtdcTransferBankField *pTransferBank, CTh
 ///请求查询投资者持仓明细响应
 void TdSpi::OnRspQryInvestorPositionDetail(CThostFtdcInvestorPositionDetailField *pInvestorPositionDetail, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(pInvestorPositionDetail == NULL && pRspInfo == NULL) return;
+    if(pInvestorPositionDetail==NULL && !check_error(pRspInfo)) return;
+    auto p = new CThostFtdcInvestorPositionDetailField;
+    memcpy(p,pInvestorPositionDetail,sizeof(*p));
+    Msg msg(msg_position_detail_data,p);
+    write(pipe_fd,&msg,sizeof(msg));
 }
 
 ///请求查询客户通知响应
@@ -389,31 +409,52 @@ void TdSpi::OnRspQryAccountregister(CThostFtdcAccountregisterField *pAccountregi
 ///错误应答
 void TdSpi::OnRspError(CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    printf("OnRspError\n");
 }
 
 ///报单通知
 void TdSpi::OnRtnOrder(CThostFtdcOrderField *pOrder)
 {
+    string msg = GbkToUtf8(pOrder->StatusMsg);
+    string status;
+    if(pOrder->OrderStatus == THOST_FTDC_OST_Canceled){
+        status = "cancel";
+    }else if(pOrder->OrderStatus == THOST_FTDC_OST_Unknown)
+    {
+        status = "unknown";
+    }
+
+    printf("OnRtnOrder %s %s %s: %s\n",pOrder->InstrumentID,status.c_str(), pOrder->OrderLocalID,msg.c_str());
 }
 
 ///成交通知
 void TdSpi::OnRtnTrade(CThostFtdcTradeField *pTrade)
 {
+    printf("OnRtnTrade %s dir:%c offset:%c price:%f volume:%d\n",pTrade->InstrumentID,pTrade->Direction,pTrade->OffsetFlag,pTrade->Price,pTrade->Volume);
 }
 
 ///报单录入错误回报
 void TdSpi::OnErrRtnOrderInsert(CThostFtdcInputOrderField *pInputOrder, CThostFtdcRspInfoField *pRspInfo)
 {
+    if(!check_error(pRspInfo)){
+        return;
+    }
+    printf("报单录入错误回报\n");
 }
 
 ///报单操作错误回报
 void TdSpi::OnErrRtnOrderAction(CThostFtdcOrderActionField *pOrderAction, CThostFtdcRspInfoField *pRspInfo)
 {
+    if(!check_error(pRspInfo)){
+        return;
+    }
+    printf("报单操作错误回报\n"); 
 }
 
 ///合约交易状态通知
 void TdSpi::OnRtnInstrumentStatus(CThostFtdcInstrumentStatusField *pInstrumentStatus)
 {
+    //printf("合约交易状态通知\n"); 
 }
 
 ///交易所公告通知
@@ -424,6 +465,7 @@ void TdSpi::OnRtnBulletin(CThostFtdcBulletinField *pBulletin)
 ///交易通知
 void TdSpi::OnRtnTradingNotice(CThostFtdcTradingNoticeInfoField *pTradingNoticeInfo)
 {
+    printf("交易通知\n");
 }
 
 ///提示条件单校验错误

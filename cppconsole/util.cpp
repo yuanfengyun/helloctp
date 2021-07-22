@@ -1,6 +1,15 @@
 #include <cstring>
 #include <iconv.h>
 #include "util.h"
+#include "ThostFtdcUserApiDataType.h"
+
+string GbkToUtf8(char *str_str)
+{
+    char buf[512];
+    memset(buf,0,sizeof(buf));
+    GbkToUtf8(str_str,strlen(str_str),buf,512);
+    return string(buf);
+}
 
 int GbkToUtf8(char *str_str, size_t src_len, char *dst_str, size_t dst_len)
 {
@@ -143,4 +152,20 @@ bool isFloat(const char * str)
 	}
 
 	return true;
+}
+
+
+const char* getDir(char c)
+{
+    if(c==THOST_FTDC_PD_Long) return "long";
+    if(c==THOST_FTDC_PD_Short) return "short";
+    if(c==THOST_FTDC_PD_Net) return "net";
+    return "unknown";
+}
+
+const char* getOffset(char c)
+{
+    if(c==THOST_FTDC_OF_Open) return "open";
+    if(c==THOST_FTDC_OF_Close) return "close";
+    return "unknown";
 }

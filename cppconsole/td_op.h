@@ -12,6 +12,7 @@ public:
 
     static void ReqConfirmSettlement();
 
+    static void ReqQryInvestorPositionDetail();
     static void ReqQryInvestorPosition();
 
     static int ReqOrderInsert(string name,string dir,string offset,string price,string volume);

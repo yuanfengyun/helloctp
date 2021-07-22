@@ -1,4 +1,5 @@
 #include<string>
+#include<cstring>
 #include<stdio.h>
 #include<map>
 #include<vector>
@@ -28,25 +29,23 @@ void* handle_msg(Msg* msg)
     }
     if(msg->id == msg_position_data){
         auto* p = (CThostFtdcInvestorPositionField*)msg->ptr;
-        string ins = string(p->InstrumentID) + p->PosiDirection;
+        string ins = string(p->InstrumentID);
         auto it = position_datas.find(ins);
         if(it!=position_datas.end()){
             delete it->second;
         }
         position_datas[ins] = p;
-        //printf("data haha\n");
+        printf("position msg:%s\n",ins.c_str());
     }
 }
 
 void handle_cmd(char* cmd)
 {
-
-    TdOp::ReqQryInvestorPosition();
-
+    if(strlen(cmd)==0) return;
     string scmd(cmd);
     vector<std::string> array = splitWithStl(scmd," ");
     string c = array[0];
-    cout<<"scmd: "<<c<<endl;
+
     if(c.find("s")==0){
         printf("====aa====\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
@@ -67,8 +66,8 @@ void handle_cmd(char* cmd)
         string ins = array[1];
         string volume = array[2];
         string price = "";
-        if(array.size()>=3)
-            string price = array[3];
+        if(array.size()>3)
+            price = array[3];
         TdOp::ReqOrderInsert(ins,"buy","open",price,volume);
     }
     else if(c.find("kk")==0){
@@ -78,8 +77,8 @@ void handle_cmd(char* cmd)
         string ins = array[1];
         string volume = array[2];
         string price = "";
-        if(array.size()>=3)
-            string price = array[3];
+        if(array.size()>3)
+            price = array[3];
         TdOp::ReqOrderInsert(ins,"sell","open",price,volume);
     }
     else if(c.find("pd")==0){
@@ -89,8 +88,8 @@ void handle_cmd(char* cmd)
         string ins = array[1];
         string volume = array[2];
         string price = "";
-        if(array.size()>=3)
-            string price = array[3];
+        if(array.size()>3)
+            price = array[3];
         TdOp::ReqOrderInsert(ins,"sell","close",price,volume);
     }
     else if(c.find("pk")==0){
@@ -100,20 +99,22 @@ void handle_cmd(char* cmd)
         string ins = array[1];
         string volume = array[2];
         string price = "";
-        if(array.size()>=3)
-            string price = array[3];
+        if(array.size()>3)
+            price = array[3];
         TdOp::ReqOrderInsert(ins,"buy","close",price,volume);
     }
     else if(c.find("p")==0){
         printf("====positions====\n");
         for(auto it=position_datas.begin();it!=position_datas.end();++it)
         {
-            printf("%s\t%d %d\t%d\n",
+            printf("%s\t%s\t%d\t%.2lf\n",
                  it->second->InstrumentID,
-                 int(it->second->PosiDirection),
-                 int(it->second->Position),
-                 int(it->second->PositionCost));
+                 getDir(it->second->PosiDirection),
+                 it->second->Position,
+                 it->second->PositionCost/it->second->Position);
         }
     }
- 
+    else if(c.find("qp")==0){
+        TdOp::ReqQryInvestorPosition();
+    }
 }

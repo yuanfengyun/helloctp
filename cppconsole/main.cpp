@@ -62,7 +62,7 @@ void* td_thread(void*)
 {
     tdapi = CThostFtdcTraderApi::CreateFtdcTraderApi("");
 
-    TdSpi* spi = new TdSpi(td_pipe_fd[2]);
+    TdSpi* spi = new TdSpi(td_pipe_fd[1]);
     tdapi->RegisterSpi(spi);
 
     tdapi->RegisterFront(TD_FRONT);
@@ -130,13 +130,29 @@ void* main_thread(void*)
             }
             handle_msg(&msg);
         }
-
+        if(FD_ISSET(td_pipe_fd[0], &rset)) // 服务器来了数据
+        {
+            Msg msg;
+            ret = read(td_pipe_fd[0], &msg, sizeof(msg));
+            if(ret == 0)
+            {
+                printf("server close1\n");
+                break;
+            }
+            else if(-1 == ret)
+            {
+                perror("read1");
+                break;
+            }
+            handle_msg(&msg);
+        }
         if(FD_ISSET(fd_stdin, &rset)) // 标准输入来了数据就发送给server
         {
             memset(writebuf, 0, sizeof(writebuf));
             ret = read(fd_stdin, writebuf, sizeof(writebuf));
             printf("========= %d\n",ret);
             if(ret > 0){
+                writebuf[ret-1] = '\0';
                 handle_cmd(writebuf);
             }
         }

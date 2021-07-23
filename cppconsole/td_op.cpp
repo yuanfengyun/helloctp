@@ -114,3 +114,23 @@ int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,strin
         printf("insert_order success:\n");
     }
 }
+
+void TdOp::ReqOrderAction(void* arg)
+{
+    auto o = (CThostFtdcOrderField*)arg;
+    CThostFtdcInputOrderActionField r = {0};
+    strcpy(r.BrokerID, BrokerID.c_str());
+    strcpy(r.InvestorID, UserID.c_str());
+    r.FrontID = o->FrontID;
+    r.SessionID = o->SessionID;
+    memcpy(r.OrderRef,o->OrderRef,sizeof(r.OrderRef));
+    memcpy(r.ExchangeID,o->ExchangeID,sizeof(r.ExchangeID));
+    memcpy(r.OrderSysID,o->OrderSysID,sizeof(r.OrderSysID));
+    r.ActionFlag = THOST_FTDC_AF_Delete;
+    int ret = tdapi->ReqOrderAction(&r,++request_id);
+    if(ret != 0){
+        printf("ReqOrderAction error:%d\n",ret);
+    }else{
+        printf("c order ");
+    }
+}

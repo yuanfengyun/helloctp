@@ -16,4 +16,8 @@ bool isFloat(const char * str);
 
 const char* getDir(char c);
 
+const char* getPositionDir(char c);
+
 const char* getOffset(char c);
+
+string getOrderStatus(char c);

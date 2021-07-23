@@ -113,6 +113,7 @@ void TdSpi::OnRspParkedOrderAction(CThostFtdcParkedOrderActionField *pParkedOrde
 ///报单操作请求响应
 void TdSpi::OnRspOrderAction(CThostFtdcInputOrderActionField *pInputOrderAction, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    check_error(pRspInfo);
 }
 
 ///投资者结算结果确认响应
@@ -415,22 +416,19 @@ void TdSpi::OnRspError(CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bI
 ///报单通知
 void TdSpi::OnRtnOrder(CThostFtdcOrderField *pOrder)
 {
-    string msg = GbkToUtf8(pOrder->StatusMsg);
-    string status;
-    if(pOrder->OrderStatus == THOST_FTDC_OST_Canceled){
-        status = "cancel";
-    }else if(pOrder->OrderStatus == THOST_FTDC_OST_Unknown)
-    {
-        status = "unknown";
-    }
-
-    printf("OnRtnOrder %s %s %s: %s\n",pOrder->InstrumentID,status.c_str(), pOrder->OrderLocalID,msg.c_str());
+   auto p = new CThostFtdcOrderField;
+    memcpy(p,pOrder,sizeof(*p));
+    Msg msg(msg_order_data,p);
+    write(pipe_fd,&msg,sizeof(msg));
 }
 
 ///成交通知
 void TdSpi::OnRtnTrade(CThostFtdcTradeField *pTrade)
 {
-    printf("OnRtnTrade %s dir:%c offset:%c price:%f volume:%d\n",pTrade->InstrumentID,pTrade->Direction,pTrade->OffsetFlag,pTrade->Price,pTrade->Volume);
+    auto p = new CThostFtdcTradeField;
+    memcpy(p,pTrade,sizeof(*p));
+    Msg msg(msg_trade_data,p);
+    write(pipe_fd,&msg,sizeof(msg));
 }
 
 ///报单录入错误回报

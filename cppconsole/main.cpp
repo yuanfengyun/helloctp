@@ -17,29 +17,40 @@
 using namespace std;
 
 // test
-char MD_FRONT[] = "tcp://180.168.146.187:10212";
-char TD_FRONT[] = "tcp://180.168.146.187:10202";
+char MD_FRONT[64] = "tcp://180.168.146.187:10212";
+char TD_FRONT[64] = "tcp://180.168.146.187:10202";
 
 // 24
 //char MD_FRONT[] = "tcp://180.168.146.187:10131";
 //char TD_FRONT[] = "tcp://180.168.146.187:10130";
 
-string BrokerID = "9999";
-string UserID = "123616";
-string Password = "nanase4ever";
+char BrokerID[32] = "9999";
+char UserID[32] = "123616";
+char Password[32] = "nanase4ever";
 
 //string UserID = "188065";
 //string Password = "yungege0";
 
-string AppID = "simnow_client_test";
-string AuthCode = "0000000000000000";
-string CLIENT_IP = "0.0.0.0";
+char AppID[32] = "simnow_client_test";
+char AuthCode[32] = "0000000000000000";
+char CLIENT_IP[32] = "0.0.0.0";
 
 CThostFtdcMdApi* mdapi = NULL;
 CThostFtdcTraderApi* tdapi = NULL;
 
 int md_pipe_fd[2];
 int td_pipe_fd[2];
+
+void init_args(int argc,char* argv[]){
+    if(argc == 1){
+        return;
+    }
+    strcpy(MD_FRONT,argv[1]);
+    strcpy(TD_FRONT,argv[2]);
+    strcpy(BrokerID,argv[3]);
+    strcpy(AppID,argv[4]);
+    strcpy(AuthCode,argv[5]);
+}
 
 void* md_thread(void*)
 {
@@ -159,8 +170,10 @@ void* main_thread(void*)
     }
 }
 
-int main()
+int main(int argc,char* argv[])
 {
+    init_args(argc,argv);
+
     pipe(md_pipe_fd);
     pipe(td_pipe_fd);
     pthread_t md_thread_t;

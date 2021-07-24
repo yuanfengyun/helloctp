@@ -35,3 +35,17 @@ profill:
 
 clean:
 	rm -rf *.o main
+
+simnow:
+	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever
+
+simnow24:
+	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10131 tcp://180.168.146.187:10130 9999 simnow_client_test 0000000000000000 123616 nanase4ever
+
+xf_test:
+	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever
+
+xf:
+	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever
+
+

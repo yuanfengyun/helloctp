@@ -20,6 +20,7 @@ map<string,CThostFtdcOrderField*> order_datas;
 int n_2_order_n = 0;
 map<int,string> n_2_order;
 map<string,int> order_2_n;
+map<string,int> ordersysid_2_key;
 
 void* handle_msg(Msg* msg)
 {
@@ -56,7 +57,9 @@ void* handle_msg(Msg* msg)
             delete it->second;
         }
         trade_datas[key] = p;
-        printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,0,p->InstrumentID,
+        int id = ordersysid_2_key[string(p->OrderSysID)];
+        sprintf(p->reserve1,"%4d",id);
+        printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,id,p->InstrumentID,
                 getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
     }
     if(msg->id == msg_order_data){
@@ -65,12 +68,20 @@ void* handle_msg(Msg* msg)
                 p->FrontID,p->SessionID,p->OrderRef);
         string key = string(key_buff);
         auto it = order_datas.find(key);
+        int id = 0;
         if(it!=order_datas.end()){
+            id = atoi(it->second->reserve1);
             delete it->second;
+        }else{
+            id = ++n_2_order_n;
         }
         order_datas[key] = p;
-        n_2_order[++n_2_order_n] = key;
-        sprintf(p->reserve1,"%4d",n_2_order_n);
+        n_2_order[id] = key;
+
+        if(p->OrderSysID[0] > 0){
+            ordersysid_2_key[string(p->OrderSysID)] = id;
+        }
+        sprintf(p->reserve1,"%4d",id);
         printf("[notify] %s 订单: %s  %s\t%s %s %6.0lf %3d/%d\t %s\n",
               p->InsertTime, p->reserve1, p->InstrumentID,
               getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),

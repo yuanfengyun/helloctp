@@ -65,18 +65,50 @@ void TdOp::ReqQryInvestorPositionDetail()
 {
     CThostFtdcQryInvestorPositionDetailField field = {0};
     memset(&field, 0, sizeof(field));
-    strcpy(field.BrokerID,BrokerID);
-    strcpy(field.InvestorID, UserID);
-    tdapi->ReqQryInvestorPositionDetail(&field, 0);
+        strcpy(field.BrokerID,BrokerID);
+        strcpy(field.InvestorID, UserID);
+        tdapi->ReqQryInvestorPositionDetail(&field, 0);
+}
+
+string getFullName(string name){
+    if(isInt(name.c_str())){
+        if(name.size()==2){
+            int month = atoi(name.c_str());
+            char year_buf[32] = {0};
+            time_t currtime;
+            time(&currtime);
+            struct tm *today = localtime(&currtime);
+            if(month < today->tm_mon+1){
+                sprintf(year_buf,"%d", today->tm_year - 100 + 1);
+            }else{
+
+                sprintf(year_buf,"%d", today->tm_year - 100);
+            }
+            name = year_buf + name;
+        }
+
+        name = "jd" + name;
+    }
+
+    return name;
 }
 
 int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,string volume){
-    printf("ReqOrderInsert 1\n");
+    if(name.find("&") != string::npos){
+        if(name.find(" ") == string::npos){
+            vector<string> array = splitWithStl(name,"&");
+            if(array.size()==2){
+                name = "SP " + getFullName(array[0]) + "&" + getFullName(array[1]);
+            }
+        }
+    }else{
+        name = getFullName(name);
+    }
+    printf("order: %s\n",name.c_str());
     if(price.size()>0 && !isFloat(price.c_str())) return -1;
     if(!isInt(volume.c_str())) return -1;
     int vol = atoi(volume.c_str());
     if(vol < 1) return -1;
-    printf("ReqOrderInsert 2\n");
     CThostFtdcInputOrderField o ={0};
     strcpy(o.BrokerID, BrokerID);
     strcpy(o.InvestorID, UserID);

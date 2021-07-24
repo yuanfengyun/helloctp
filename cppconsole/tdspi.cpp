@@ -474,7 +474,7 @@ void TdSpi::OnRtnBulletin(CThostFtdcBulletinField *pBulletin)
 ///交易通知
 void TdSpi::OnRtnTradingNotice(CThostFtdcTradingNoticeInfoField *pTradingNoticeInfo)
 {
-    printf("[notify] 交易通知: %s\n",GbkToUft8(pTradingNoticeInfo->FieldContent).c_str();
+    printf("[notify] 交易通知: %s\n",GbkToUtf8(pTradingNoticeInfo->FieldContent).c_str());
 }
 
 ///提示条件单校验错误

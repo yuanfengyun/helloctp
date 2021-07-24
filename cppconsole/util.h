@@ -20,4 +20,4 @@ const char* getPositionDir(char c);
 
 const char* getOffset(char c);
 
-string getOrderStatus(char c);
+string getOrderStatus(char c,char submit_c,char* str);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <map>
 #include "ThostFtdcMdApi.h"
 #include "ThostFtdcTraderApi.h"
 
@@ -17,3 +18,9 @@ extern char CLIENT_IP[];
 
 extern CThostFtdcMdApi* mdapi;
 extern CThostFtdcTraderApi* tdapi;
+
+extern map<string,CThostFtdcDepthMarketDataField*> market_datas;
+extern map<string,CThostFtdcInvestorPositionField*> position_datas;
+extern map<string,CThostFtdcTradeField*> trade_datas;
+extern map<string,CThostFtdcOrderField*> order_datas;
+

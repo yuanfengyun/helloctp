@@ -45,19 +45,19 @@ void* handle_msg(Msg* msg)
             delete it->second;
         }
         position_datas[ins] = p;
-        printf("position msg:%s\n",ins.c_str());
+        //printf("position msg:%s\n",ins.c_str());
     }
     if(msg->id == msg_trade_data){
         auto* p = (CThostFtdcTradeField*)msg->ptr;
-        sprintf(key_buff,"%s-%s-%s-%s-%c",p->TradeDate,
-                p->TradeTime,p->InstrumentID,p->TradeID,p->Direction);
+        sprintf(key_buff,"%s-%s-%s-%s-%c",p->TradeDate,p->TradeTime,p->InstrumentID,p->TradeID,p->Direction);
         string key = string(key_buff);
         auto it = trade_datas.find(key);
         if(it!=trade_datas.end()){
             delete it->second;
         }
         trade_datas[key] = p;
-        printf("trade msg:%s\n",key.c_str());
+        printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,0,p->InstrumentID,
+                getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
     }
     if(msg->id == msg_order_data){
         auto* p = (CThostFtdcOrderField*)msg->ptr;
@@ -70,8 +70,12 @@ void* handle_msg(Msg* msg)
         }
         order_datas[key] = p;
         n_2_order[++n_2_order_n] = key;
-        sprintf(p->reserve1,"%d",n_2_order_n);
-        printf("order msg:%s\n",key.c_str());
+        sprintf(p->reserve1,"%4d",n_2_order_n);
+        printf("[notify] %s 订单: %s  %s\t%s %s %6.0lf %3d/%d\t %s\n",
+              p->InsertTime, p->reserve1, p->InstrumentID,
+              getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
+              p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
+              getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
     }
 }
 
@@ -82,8 +86,8 @@ void handle_cmd(char* cmd)
     vector<std::string> array = splitWithStl(scmd," ");
     string c = array[0];
 
-    if(c.find("s")==0){
-        printf("====aa====\n");
+    if(c == string("s")){
+        printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
         {
             printf("%s\t%d %d\t%d %d\t%d\n",
@@ -95,7 +99,7 @@ void handle_cmd(char* cmd)
                     int(it->second->OpenInterest - it->second->PreOpenInterest));
         }
     }
-    else if(c.find("kd")==0){
+    else if(c == string("kd")){
         if(array.size() < 3){
             return;
         }
@@ -106,7 +110,7 @@ void handle_cmd(char* cmd)
             price = array[3];
         TdOp::ReqOrderInsert(ins,"buy","open",price,volume);
     }
-    else if(c.find("kk")==0){
+    else if(c == string("kk")){
         if(array.size() < 3){
             return;
         }
@@ -117,7 +121,7 @@ void handle_cmd(char* cmd)
             price = array[3];
         TdOp::ReqOrderInsert(ins,"sell","open",price,volume);
     }
-    else if(c.find("pd")==0){
+    else if(c == string("pd")){
         if(array.size() < 3){
             return;
         }
@@ -128,7 +132,7 @@ void handle_cmd(char* cmd)
             price = array[3];
         TdOp::ReqOrderInsert(ins,"sell","close",price,volume);
     }
-    else if(c.find("pk")==0){
+    else if(c == string("pk")){
         if(array.size() < 3){
             return;
         }
@@ -139,8 +143,8 @@ void handle_cmd(char* cmd)
             price = array[3];
         TdOp::ReqOrderInsert(ins,"buy","close",price,volume);
     }
-    else if(c.find("p")==0){
-        printf("====positions====\n");
+    else if(c == string("p")){
+        printf("====position====\n");
         for(auto it=position_datas.begin();it!=position_datas.end();++it)
         {
             printf("%s\t%s\t%d\t%.2lf\n",
@@ -150,15 +154,14 @@ void handle_cmd(char* cmd)
                     it->second->PositionCost/it->second->Position);
         }
     }
-    else if(c.find("qp")==0){
+    else if(c == string("qp")){
         TdOp::ReqQryInvestorPosition();
     }
-    else if(c.find("trade")==0){
-        printf("====trades====\n");
+    else if(c == string("trade")){
+        printf("====trade====\n");
         for(auto it=trade_datas.begin();it!=trade_datas.end();++it)
         {
-            printf("%s-%s %s\t%s %s\t%d\t%.2lf\n",
-                    it->second->TradeDate,
+            printf("%s %s\t%s%s\t%d手\t%.0lf\n",
                     it->second->TradeTime,
                     it->second->InstrumentID,
                     getDir(it->second->Direction),
@@ -167,18 +170,31 @@ void handle_cmd(char* cmd)
                     it->second->Price);
         }
     }
-    else if(c.find("o")==0){
-        printf("====orders====\n");
+    else if(c == string("o")){
+        printf("====valid order====\n");
         for(auto it=order_datas.begin();it!=order_datas.end();++it)
         {
+            if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
             string msg = GbkToUtf8(it->second->StatusMsg);
-            printf("no:%s\t%s %s\t%s %s %.2lf %d/%d\t %s\n",
-                    it->second->reserve1,it->second->InsertTime,it->second->InstrumentID,
-                    getDir(it->second->Direction),it->second->CombOffsetFlag,
+            printf("%s %s\t%s\t%s  %s %6.0lf  %2d/%d\t %s\n",
+                    it->second->InsertTime, it->second->reserve1, it->second->InstrumentID,
+                    getDir(it->second->Direction),getOffset(it->second->CombOffsetFlag[0]),
                     it->second->LimitPrice,it->second->VolumeTraded,it->second->VolumeTotalOriginal,msg.c_str());
         }
     }
-    else if(c.find("c")==0){
+    else if(c == string("oo")){
+        printf("====all order====\n");
+        for(auto it=order_datas.begin();it!=order_datas.end();++it)
+        {
+            string msg = GbkToUtf8(it->second->StatusMsg);
+            printf("%s %s\t%s\t%s  %s %6.0lf  %2d/%d\t %c %s\n",
+                    it->second->InsertTime, it->second->reserve1, it->second->InstrumentID,
+                    getDir(it->second->Direction),getOffset(it->second->CombOffsetFlag[0]),
+                    it->second->LimitPrice,it->second->VolumeTraded,it->second->VolumeTotalOriginal,
+                    it->second->OrderStatus,msg.c_str());
+        }
+    }
+    else if(c == string("c")){
         if(array.size() < 2) return;
         if(!isInt(array[1].c_str())) return;
 
@@ -186,5 +202,9 @@ void handle_cmd(char* cmd)
         string key = n_2_order[no];
         auto p = order_datas[key];
         TdOp::ReqOrderAction(p);
+    }
+    else if(c == string("password")){
+        if(array.size() < 2) return;
+        TdOp::ReqUserPasswordUpdate(array[1].c_str());
     }
 }

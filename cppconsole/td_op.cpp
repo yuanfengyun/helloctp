@@ -9,8 +9,6 @@ int request_id = 1;
 
 // 客户端认证
 void TdOp::ReqAuthenticate() {
-    printf("客户端认证中...\n");
-
     CThostFtdcReqAuthenticateField req;
     strcpy(req.BrokerID,BrokerID);
     strcpy(req.UserID,UserID);
@@ -20,7 +18,7 @@ void TdOp::ReqAuthenticate() {
     int iResult = tdapi->ReqAuthenticate(&req, ++request_id);
 
     if( iResult != 0) {
-        printf("发送客户端认证请求失败！%d\n", iResult);
+        printf("[error] 发送客户端认证请求失败！%d\n", iResult);
     }
 }
 
@@ -36,7 +34,7 @@ int TdOp::ReqUserLogin()
         int ret = tdapi->ReqUserLogin(&field, ++request_id);
         if (0 != ret)
         {
-            printf("发送客户端登陆请求失败！%d\n", ret);
+            printf("[error] 发送客户端登陆请求失败！%d\n", ret);
         }
 }
 
@@ -49,7 +47,7 @@ void TdOp::ReqConfirmSettlement()
         int ret = tdapi->ReqSettlementInfoConfirm(&field, 0);
         if(0 != ret)
         {
-            printf("确认结算结果失败！%d\n", ret);
+            printf("[error] 确认结算结果失败！%d\n", ret);
         }
 }
 
@@ -109,9 +107,9 @@ int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,strin
     o.ForceCloseReason = THOST_FTDC_FCC_NotForceClose;  
     int ret = tdapi->ReqOrderInsert(&o, 0);
     if(ret != 0){
-        printf("insert order error:%d\n",ret);
+        printf("[error] 报单失败 error:%d\n",ret);
     } else{
-        printf("insert_order success:\n");
+        printf("[info] 报单成功\n");
     }
 }
 
@@ -129,8 +127,23 @@ void TdOp::ReqOrderAction(void* arg)
     r.ActionFlag = THOST_FTDC_AF_Delete;
     int ret = tdapi->ReqOrderAction(&r,++request_id);
     if(ret != 0){
-        printf("ReqOrderAction error:%d\n",ret);
+        printf("[error] 撤单失败 error:%d\n",ret);
     }else{
-        printf("c order ");
+        //printf("");
     }
+}
+
+void TdOp::ReqUserPasswordUpdate(const char* password)
+{
+    CThostFtdcUserPasswordUpdateField r = {0};
+    strcpy(r.BrokerID, BrokerID);
+    strcpy(r.UserID, UserID);
+    strcpy(r.OldPassword,Password);
+    strcpy(r.NewPassword,password);
+    int ret = tdapi->ReqUserPasswordUpdate(&r,++request_id);
+    if(ret != 0){
+        printf("[error] 修改口令失败 error:%d\n",ret);
+    }else{
+        printf("ReqUserPasswordUpdate send\n");
+    }   
 }

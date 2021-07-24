@@ -11,7 +11,7 @@
 ///当客户端与交易后台建立起通信连接时（还未登录前），该方法被调用。
 void MdSpi::OnFrontConnected()
 {
-    printf("md connected\n");
+    printf("[info] 行情服务器连接成功\n");
     MdOp::ReqUserLogin();
 }
 
@@ -24,20 +24,20 @@ void MdSpi::OnFrontConnected()
 ///        0x2003 收到错误报文
 void MdSpi::OnFrontDisconnected(int nReason)
 {
-    printf("md disconnected %x\n",nReason);
+    printf("[error] 行情服务器断开连接 %x\n",nReason);
 }
 
 ///心跳超时警告。当长时间未收到报文时，该方法被调用。
 ///@param nTimeLapse 距离上次接收报文的时间
 void MdSpi::OnHeartBeatWarning(int nTimeLapse)
 {
-    printf("md heartbeat\n");
+    printf("[warning] 行情服务器心跳超时\n");
 }
 
 ///登录请求响应
 void MdSpi::OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    printf("md login rsp:\n");
+    printf("[info] 行情服务器登陆成功\n");
     MdOp::SubscribeMarketData();
 }
 

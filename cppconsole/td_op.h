@@ -18,4 +18,6 @@ public:
     static int ReqOrderInsert(string name,string dir,string offset,string price,string volume);
 
     static void ReqOrderAction(void* arg);
+
+    static void ReqUserPasswordUpdate(const char* password);
 };

@@ -156,33 +156,44 @@ bool isFloat(const char * str)
 
 const char* getDir(char c)
 {
-    if(c==THOST_FTDC_D_Buy) return "buy ";
-    if(c==THOST_FTDC_D_Sell) return "sell";
+    if(c==THOST_FTDC_D_Buy) return "买";
+    if(c==THOST_FTDC_D_Sell) return "卖";
 }
 
 const char* getPositionDir(char c)
 {
-    if(c==THOST_FTDC_PD_Long) return "long ";
-    if(c==THOST_FTDC_PD_Short) return "short";
-    if(c==THOST_FTDC_PD_Net) return "net  ";
+    if(c==THOST_FTDC_PD_Long) return "多";
+    if(c==THOST_FTDC_PD_Short) return "空";
+    if(c==THOST_FTDC_PD_Net) return "净";
     return "unknown";
 }
 
 const char* getOffset(char c)
 {
-    if(c==THOST_FTDC_OF_Open) return "open ";
-    if(c==THOST_FTDC_OF_Close) return "close";
+    if(c==THOST_FTDC_OF_Open) return "开";
+    if(c==THOST_FTDC_OF_Close) return "平";
     return "unknown";
 }
 
-string getOrderStatus(char c)
+string getOrderStatus(char c,char submit_c,char* str)
 {
     string status;
-    if(c == THOST_FTDC_OST_Canceled){
-        status = "cancel";
-    }else if(c == THOST_FTDC_OST_Unknown)
-    {
-        status = "unknown";
+    if(submit_c == THOST_FTDC_OSS_InsertRejected){
+        status += "报单被拒绝:  " + GbkToUtf8(str) + "!!!";
+        return status;
+    }
+
+    if(c==THOST_FTDC_OST_AllTraded){
+        status = "全部成交";
+    }
+    else if(c==THOST_FTDC_OST_PartTradedQueueing){
+        status == "部分成交";
+    }
+    else if(c == THOST_FTDC_OST_Canceled){
+        status = GbkToUtf8(str);
+    }
+    else{
+        status = GbkToUtf8(str);
     }
     return status;
 }

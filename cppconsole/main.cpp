@@ -7,6 +7,8 @@
 #include <map>
 #include <cstring>
 #include <iostream>
+#include <readline/readline.h>
+#include <readline/history.h>
 #include "msg.h"
 #include "config.h"
 #include "mdspi.h"
@@ -107,6 +109,7 @@ void* main_thread(void*)
     int len = 0;
     char readbuf[1024] = {0};
     char writebuf[1024] = {0};
+    rl_callback_handler_install ("ctp> ", handle_cmd);
     while(1)
     {
         FD_ZERO(&rset);
@@ -159,13 +162,7 @@ void* main_thread(void*)
         }
         if(FD_ISSET(fd_stdin, &rset)) // 标准输入来了数据就发送给server
         {
-            memset(writebuf, 0, sizeof(writebuf));
-            ret = read(fd_stdin, writebuf, sizeof(writebuf));
-            printf("========= %d\n",ret);
-            if(ret > 0){
-                writebuf[ret-1] = '\0';
-                handle_cmd(writebuf);
-            }
+            rl_callback_read_char();
         }
     }
 }

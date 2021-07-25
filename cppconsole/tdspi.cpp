@@ -208,7 +208,7 @@ void TdSpi::OnRspQryInvestorPosition(CThostFtdcInvestorPositionField *pInvestorP
     }
     auto p = new CThostFtdcInvestorPositionField;
     memcpy(p,pInvestorPosition,sizeof(CThostFtdcInvestorPositionField));
-    Msg msg(msg_position_data,p);
+    Msg msg(msg_position_data,p,bIsLast);
     write(pipe_fd,&msg,sizeof(msg));
 }
 

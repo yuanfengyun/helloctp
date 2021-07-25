@@ -3,6 +3,9 @@ CFLAGS=-g
 util.o:util.h util.cpp
 	g++ -c util.cpp -I./include/ctp $(CFLAGS)
 
+position.o:position.h position.cpp
+	g++ -c position.cpp -I./include/ctp $(CFLAGS)
+
 console.o:msg.h console.h console.cpp
 	g++ -c console.cpp -I./include/ctp $(CFLAGS)
 
@@ -21,8 +24,8 @@ td_op.o:td_op.h td_op.cpp
 main.o:main.cpp config.h msg.h util.h
 	g++ -c main.cpp -I./include/ctp $(CFLAGS)
 
-main:mdspi.o tdspi.o main.o md_op.o td_op.o util.o console.o
-	g++ -o main main.o mdspi.o tdspi.o md_op.o td_op.o util.o console.o -lthostmduserapi_se -lthosttraderapi_se -lpthread -L./lib $(CFLAGS)
+main:mdspi.o tdspi.o main.o md_op.o td_op.o util.o console.o position.o
+	g++ -o main main.o mdspi.o tdspi.o md_op.o td_op.o util.o console.o position.o -lthostmduserapi_se -lthosttraderapi_se -lpthread -lreadline -L./lib $(CFLAGS)
 
 run:
 	LD_LIBRARY_PATH=./lib ./main

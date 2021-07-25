@@ -4,23 +4,85 @@
 #include<map>
 #include<vector>
 #include<iostream>
+#include <readline/history.h>
 #include "ThostFtdcUserApiStruct.h"
 #include "console.h"
 #include "util.h"
 #include "msg.h"
 #include "td_op.h"
+#include "position.h"
 
 using namespace std;
 
+bool position_inited = false;
 map<string,CThostFtdcDepthMarketDataField*> market_datas;
 map<string,CThostFtdcInvestorPositionField*> position_datas;
 map<string,CThostFtdcTradeField*> trade_datas;
 map<string,CThostFtdcOrderField*> order_datas;
+map<string,Position*> positions;
 
 int n_2_order_n = 0;
 map<int,string> n_2_order;
 map<string,int> order_2_n;
 map<string,int> ordersysid_2_key;
+
+void update_position_with_trade(CThostFtdcTradeField* t)
+{
+    string key = t->InstrumentID;
+    auto itp = positions.find(key);
+    Position* p = NULL;
+    if(itp == positions.end()){
+        p = new Position(t->ExchangeID,t->InstrumentID);
+        positions[key] = p;
+    }else{
+        p = itp->second;
+    }
+    // 开仓
+    if(t->OffsetFlag==THOST_FTDC_OF_Open){
+        if(t->Direction == THOST_FTDC_D_Buy){
+            p->Long += t->Volume;
+        }
+        else if(t->Direction == THOST_FTDC_D_Sell){
+            p->Short += t->Volume;
+        }
+    }else{
+        if(t->Direction == THOST_FTDC_D_Buy){
+            p->Short -= t->Volume;
+        }
+        else if(t->Direction == THOST_FTDC_D_Sell){
+            p->Long -= t->Volume;
+        }
+    }
+}
+
+// 平仓锁定的持仓
+int get_close_frozen(string InstrumentID,string dir){
+    char d = THOST_FTDC_D_Buy;
+    int volume = 0;
+    if(dir==string("sell")) d = THOST_FTDC_D_Sell;
+    for(auto it=order_datas.begin();it!=order_datas.end();++it)
+    {
+        if(string(it->second->InstrumentID) != InstrumentID) continue;
+
+        if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
+        char offset = it->second->CombOffsetFlag[0];
+        if(offset == THOST_FTDC_OF_Open) continue;
+
+        char dir = it->second->Direction;
+        if(dir == d){
+            volume += it->second->VolumeTotal;
+        }
+    }
+    return volume;
+}
+
+// 开仓锁定（money)
+int get_open_frozen(){
+
+}
+
+void update_position_with_order(){
+}
 
 void* handle_msg(Msg* msg)
 {
@@ -37,8 +99,26 @@ void* handle_msg(Msg* msg)
         //printf("data haha\n");
     }
     if(msg->id == msg_position_data){
+        //printf("position data\n");
         auto* p = (CThostFtdcInvestorPositionField*)msg->ptr;
         string ins = string(p->InstrumentID);
+        auto itp = positions.find(ins);
+        if(itp == positions.end()){
+            positions[ins] = new Position(p);
+        }else{
+            if(p->PosiDirection == THOST_FTDC_PD_Long)
+                itp->second->LastLong = p->YdPosition;
+            else if(p->PosiDirection == THOST_FTDC_PD_Short)
+                itp->second->LastShort = p->YdPosition;
+        }
+
+        //  根据成交记录整理出当前持仓
+        if(msg->isLast){
+            for(auto it = trade_datas.begin();it!=trade_datas.end();it++){
+                update_position_with_trade(it->second);
+            }
+            position_inited = true;
+        }
         ins += " ";
         ins += getPositionDir(p->PosiDirection);
         auto it = position_datas.find(ins);
@@ -55,12 +135,16 @@ void* handle_msg(Msg* msg)
         auto it = trade_datas.find(key);
         if(it!=trade_datas.end()){
             delete it->second;
+            return 0;
         }
         trade_datas[key] = p;
         int id = ordersysid_2_key[string(p->OrderSysID)];
         sprintf(p->reserve1,"%4d",id);
-        printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,id,p->InstrumentID,
+        if(position_inited){
+            printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,id,p->InstrumentID,
                 getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
+            update_position_with_trade(p);
+        }
     }
     if(msg->id == msg_order_data){
         auto* p = (CThostFtdcOrderField*)msg->ptr;
@@ -82,11 +166,12 @@ void* handle_msg(Msg* msg)
             ordersysid_2_key[string(p->OrderSysID)] = id;
         }
         sprintf(p->reserve1,"%4d",id);
-        printf("[notify] %s 订单: %s  %s\t%s %s %6.0lf %3d/%d\t %s\n",
-              p->InsertTime, p->reserve1, p->InstrumentID,
-              getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
-              p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
-              getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
+        if(position_inited)
+            printf("[notify] %s 订单: %s  %s\t%s %s %6.0lf %3d/%d\t %s\n",
+                p->InsertTime, p->reserve1, p->InstrumentID,
+                getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
+                p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
+                getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
     }
 }
 
@@ -97,7 +182,7 @@ void handle_cmd(char* cmd)
     vector<std::string> array = splitWithStl(scmd," ");
     string c = array[0];
 
-    if(c == string("s")){
+    if(c == string("s") || c == string("show")){
         printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
         {
@@ -156,13 +241,15 @@ void handle_cmd(char* cmd)
     }
     else if(c == string("p")){
         printf("====position====\n");
-        for(auto it=position_datas.begin();it!=position_datas.end();++it)
+        for(auto it=positions.begin();it!=positions.end();++it)
         {
-            printf("%s\t%s\t%d\t%.2lf\n",
+            printf("%s\t long:%3d  frozen:%3d\tshort:%3d frozen:%3d\n",
                     it->second->InstrumentID,
-                    getPositionDir(it->second->PosiDirection),
-                    it->second->Position,
-                    it->second->PositionCost/it->second->Position);
+                    it->second->Long,
+                    get_close_frozen(it->second->InstrumentID,"sell"),
+                    it->second->Short,
+                    get_close_frozen(it->second->InstrumentID,"buy")
+                    );
         }
     }
     else if(c == string("qp")){
@@ -172,7 +259,7 @@ void handle_cmd(char* cmd)
         printf("====trade====\n");
         for(auto it=trade_datas.begin();it!=trade_datas.end();++it)
         {
-            printf("%s %s\t%s%s\t%d手\t%.0lf\n",
+            printf("%s %s  %s %s%4d手   %.0lf\n",
                     it->second->TradeTime,
                     it->second->InstrumentID,
                     getDir(it->second->Direction),
@@ -218,4 +305,5 @@ void handle_cmd(char* cmd)
         if(array.size() < 2) return;
         TdOp::ReqUserPasswordUpdate(array[1].c_str());
     }
+    add_history(cmd);
 }

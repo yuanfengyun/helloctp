@@ -4,6 +4,7 @@
 #include <map>
 #include "ThostFtdcMdApi.h"
 #include "ThostFtdcTraderApi.h"
+#include "position.h"
 
 using namespace std;
 
@@ -23,4 +24,4 @@ extern map<string,CThostFtdcDepthMarketDataField*> market_datas;
 extern map<string,CThostFtdcInvestorPositionField*> position_datas;
 extern map<string,CThostFtdcTradeField*> trade_datas;
 extern map<string,CThostFtdcOrderField*> order_datas;
-
+extern map<string,Position*> positions;

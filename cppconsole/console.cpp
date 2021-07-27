@@ -26,6 +26,14 @@ map<int,string> n_2_order;
 map<string,int> order_2_n;
 map<string,int> ordersysid_2_key;
 
+int get_order_id(CThostFtdcOrderField* p){
+    char key_buff[256]={0};
+    sprintf(key_buff,"%s-%d-%d-%s",p->InsertTime,
+            p->FrontID,p->SessionID,p->OrderRef);
+    string key = string(key_buff);
+    return order_2_n[key];
+}
+
 void update_position_with_trade(CThostFtdcTradeField* t)
 {
     string key = t->InstrumentID;
@@ -139,10 +147,9 @@ void* handle_msg(Msg* msg)
         }
         trade_datas[key] = p;
         int id = ordersysid_2_key[string(p->OrderSysID)];
-        sprintf(p->reserve1,"%4d",id);
         if(position_inited){
             printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,id,p->InstrumentID,
-                getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
+                    getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
             update_position_with_trade(p);
         }
     }
@@ -154,10 +161,11 @@ void* handle_msg(Msg* msg)
         auto it = order_datas.find(key);
         int id = 0;
         if(it!=order_datas.end()){
-            id = atoi(it->second->reserve1);
+            id = order_2_n[key];
             delete it->second;
         }else{
             id = ++n_2_order_n;
+            order_2_n[key] = id;
         }
         order_datas[key] = p;
         n_2_order[id] = key;
@@ -165,13 +173,12 @@ void* handle_msg(Msg* msg)
         if(p->OrderSysID[0] > 0){
             ordersysid_2_key[string(p->OrderSysID)] = id;
         }
-        sprintf(p->reserve1,"%4d",id);
         if(position_inited)
-            printf("[notify] %s 订单: %s  %s\t%s %s %6.0lf %3d/%d\t %s\n",
-                p->InsertTime, p->reserve1, p->InstrumentID,
-                getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
-                p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
-                getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
+            printf("[notify] %s 订单: %4d  %s\t%s %s %6.0lf %3d/%d\t %s\n",
+                    p->InsertTime, id, p->InstrumentID,
+                    getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
+                    p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
+                    getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
     }
 }
 
@@ -249,7 +256,7 @@ void handle_cmd(char* cmd)
                     get_close_frozen(it->second->InstrumentID,"sell"),
                     it->second->Short,
                     get_close_frozen(it->second->InstrumentID,"buy")
-                    );
+                  );
         }
     }
     else if(c == string("qp")){
@@ -275,7 +282,7 @@ void handle_cmd(char* cmd)
             if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
             string msg = GbkToUtf8(it->second->StatusMsg);
             printf("%s %s\t%s\t%s  %s %6.0lf  %2d/%d\t %s\n",
-                    it->second->InsertTime, it->second->reserve1, it->second->InstrumentID,
+                    it->second->InsertTime, get_order_id(it->second), it->second->InstrumentID,
                     getDir(it->second->Direction),getOffset(it->second->CombOffsetFlag[0]),
                     it->second->LimitPrice,it->second->VolumeTraded,it->second->VolumeTotalOriginal,msg.c_str());
         }
@@ -285,8 +292,8 @@ void handle_cmd(char* cmd)
         for(auto it=order_datas.begin();it!=order_datas.end();++it)
         {
             string msg = GbkToUtf8(it->second->StatusMsg);
-            printf("%s %s\t%s\t%s  %s %6.0lf  %2d/%d\t %c %s\n",
-                    it->second->InsertTime, it->second->reserve1, it->second->InstrumentID,
+            printf("%s %4d\t%s\t%s  %s %6.0lf  %2d/%d\t %c %s\n",
+                    it->second->InsertTime, get_order_id(it->second), it->second->InstrumentID,
                     getDir(it->second->Direction),getOffset(it->second->CombOffsetFlag[0]),
                     it->second->LimitPrice,it->second->VolumeTraded,it->second->VolumeTotalOriginal,
                     it->second->OrderStatus,msg.c_str());

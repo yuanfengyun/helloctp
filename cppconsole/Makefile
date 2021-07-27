@@ -25,7 +25,7 @@ main.o:main.cpp config.h msg.h util.h
 	g++ -c main.cpp -I./include/ctp $(CFLAGS)
 
 main:mdspi.o tdspi.o main.o md_op.o td_op.o util.o console.o position.o
-	g++ -o main main.o mdspi.o tdspi.o md_op.o td_op.o util.o console.o position.o -lthostmduserapi_se -lthosttraderapi_se -lpthread -lreadline -L./lib $(CFLAGS)
+	g++ -o main main.o mdspi.o tdspi.o md_op.o td_op.o util.o console.o position.o -lthostmduserapi -lthosttraderapi -lpthread -lreadline -L./lib $(CFLAGS)
 
 run:
 	LD_LIBRARY_PATH=./lib ./main
@@ -46,7 +46,7 @@ simnow24:
 	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10131 tcp://180.168.146.187:10130 9999 simnow_client_test 0000000000000000 123616 nanase4ever
 
 xf_test:
-	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever
+	LD_LIBRARY_PATH=./lib ./main tcp://183.2.185.160:41313 tcp://183.2.185.160:41305 6050 client_yungege_1.0 XFQHXFQHXFQHXFQH 82001512 yungege007
 
 xf:
 	LD_LIBRARY_PATH=./lib ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever

@@ -9,11 +9,19 @@ int request_id = 1;
 
 // 客户端认证
 void TdOp::ReqAuthenticate() {
-    CThostFtdcReqAuthenticateField req;
+    CThostFtdcReqAuthenticateField req={0};
+    memset(&req,0,sizeof(req));
     strcpy(req.BrokerID,BrokerID);
     strcpy(req.UserID,UserID);
+    strcpy(req.AppID,AppID);
     strcpy(req.UserProductInfo,AppID);
     strcpy(req.AuthCode,AuthCode);
+
+    printf("======");
+    printf("BrokerID: %s\n",req.BrokerID);
+    printf("UserID: %s\n",req.UserID);
+    printf("UserProductInfo: %s\n",req.AppID);
+    printf("AuthCode: %s\n",req.AuthCode);
 
     int iResult = tdapi->ReqAuthenticate(&req, ++request_id);
 
@@ -24,7 +32,7 @@ void TdOp::ReqAuthenticate() {
 
 int TdOp::ReqUserLogin()
 {
-    CThostFtdcReqUserLoginField field;
+    CThostFtdcReqUserLoginField field={0};
         memset(&field, 0, sizeof(field));
         strcpy(field.BrokerID,BrokerID);
         strcpy(field.UserID, UserID);
@@ -179,3 +187,5 @@ void TdOp::ReqUserPasswordUpdate(const char* password)
         printf("ReqUserPasswordUpdate send\n");
     }   
 }
+
+

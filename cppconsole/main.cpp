@@ -52,6 +52,15 @@ void init_args(int argc,char* argv[]){
     strcpy(BrokerID,argv[3]);
     strcpy(AppID,argv[4]);
     strcpy(AuthCode,argv[5]);
+    strcpy(UserID,argv[6]);
+    strcpy(Password,argv[7]);
+
+    printf("md_front: %s\n",MD_FRONT);
+    printf("td_front: %s\n",TD_FRONT);
+    printf("BrokerID: %s\n",BrokerID);
+    printf("UserID: %s\n",UserID);
+    printf("UserProductInfo: %s\n",AppID);
+    printf("AuthCode: %s\n",AuthCode);
 }
 
 void* md_thread(void*)
@@ -59,7 +68,7 @@ void* md_thread(void*)
     mdapi = CThostFtdcMdApi::CreateFtdcMdApi("/var/ctp",false,false);
 
     mdapi->Init();
-
+    printf("[info] 行情服务器版本：%s\n",mdapi->GetApiVersion());
     mdapi->RegisterFront(MD_FRONT);
 
     MdSpi* spi = new MdSpi(md_pipe_fd[1]);
@@ -84,6 +93,7 @@ void* td_thread(void*)
     tdapi->SubscribePrivateTopic(THOST_TERT_RESTART);
 
     tdapi->Init();
+    printf("[info] 交易服务器版本：%s\n",tdapi->GetApiVersion());
 
     tdapi->Join();
 }

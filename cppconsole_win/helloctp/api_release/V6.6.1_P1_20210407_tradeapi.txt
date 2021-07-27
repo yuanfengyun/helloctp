@@ -1,0 +1,69 @@
+版本号：V6.6.1_P1_20210407_tradeapi
+后台版本：V6.6.1_P1
+注意：CTP后台V6.6.1_P1版本兼容线上旧API接入，V6.6.1_P1版本API兼容接入CTP后台版本V6.5.0及以上版本
+
+
+变更说明：（请各终端厂商根据自身情况进行开发）
+
+1、因原API接口中‘用户登录请求’中的登录备注字段LoginRemark长度为36个字节，期货公司及终端厂商反馈该字段长度不够，故在‘CThostFtdcUserSystemInfoField’新增‘ClientLoginRemark’字段，解决原登录备注长度不足的问题。如需使用本功能，CTP后台系统需要升级至V6.6.1及以上版本。
+	
+调用的接口如下：
+	///注册用户终端信息，用于中继服务器多连接模式
+	///需要在终端认证成功后，用户登录前调用该接口
+	virtual int RegisterUserSystemInfo(CThostFtdcUserSystemInfoField *pUserSystemInfo) = 0;
+	
+        ///上报用户终端信息，用于中继服务器操作员登录模式
+	///操作员登录后，可以多次调用该接口上报客户信息
+	virtual int SubmitUserSystemInfo(CThostFtdcUserSystemInfoField *pUserSystemInfo) = 0;
+
+
+接口中新增字段如下：（在CThostFtdcUserSystemInfoField如下字段，支持中继客户填写登录备注（例如客户端的IP，MAC等信息），该字段长度为150字节）
+
+       ///客户登录备注2
+       TThostFtdcClientLoginRemarkType	ClientLoginRemark;
+
+
+
+2、支持中金所顶单业务，支持中金所报价填写被顶单的单子OrderSysID，顶单即用一笔新报价，来更新相同合约的老报价，一次指令中包含撤销老报价和录入新报价两个操作，且会生成新的报价单编号。如需使用本功能，CTP后台系统需要升级至V6.6.1及以上版本。
+
+调用的接口如下：
+
+	///报价录入请求
+	virtual int ReqQuoteInsert(CThostFtdcInputQuoteField *pInputQuote, int nRequestID) = 0;
+
+接口中新增字段如下：
+
+        CThostFtdcInputQuoteField增加字段	
+        ///被顶单编号
+        TThostFtdcOrderSysIDType	ReplaceSysID;
+
+注：
+1）ReplaceSysID为空：普通报价，即不顶单；
+2）ReplaceSysID填"last"：对最近一笔报价顶单；
+3）ReplaceSysID填指定报价编号：对指定报价编号顶单。
+
+
+
+3、CTP支持交易所结算风险隔离功能，针对已完成风险计算但尚未完成正式结算的品种，支持查询该风险产品与风险持仓。如需使用本功能，CTP后台系统需要升级至V6.6.0及以上版本。
+
+
+新增接口如下：
+        
+        ///投资者风险结算持仓查询
+	virtual int ReqQryRiskSettleInvstPosition(CThostFtdcQryRiskSettleInvstPositionField *pQryRiskSettleInvstPosition, int nRequestID) = 0;
+	///风险结算产品查询
+	virtual int ReqQryRiskSettleProductStatus(CThostFtdcQryRiskSettleProductStatusField *pQryRiskSettleProductStatus, int nRequestID) = 0;
+
+	
+        ///投资者风险结算持仓查询响应
+	virtual void OnRspQryRiskSettleInvstPosition(CThostFtdcRiskSettleInvstPositionField *pRiskSettleInvstPosition, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast) {};
+	///风险结算产品查询响应
+	virtual void OnRspQryRiskSettleProductStatus(CThostFtdcRiskSettleProductStatusField *pRiskSettleProductStatus, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast) {};
+	
+
+4、支持API与前置传输过程中的数据压缩，该变更对API使用者来说无影响。CTP后台系统在V6.6.1_P1版本支持。
+
+
+
+
+

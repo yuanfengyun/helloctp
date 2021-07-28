@@ -54,11 +54,24 @@ void TdOp::ReqConfirmSettlement()
         memset(&field, 0, sizeof(field));
         strcpy(field.BrokerID,BrokerID);
         strcpy(field.InvestorID, UserID);
-        int ret = tdapi->ReqSettlementInfoConfirm(&field, 0);
+        int ret = tdapi->ReqSettlementInfoConfirm(&field, ++request_id);
         if(0 != ret)
         {
             printf("[error] 确认结算结果失败！%d\n", ret);
         }
+}
+
+void TdOp::ReqQryTradingAccount()
+{
+	CThostFtdcQryTradingAccountField field;
+	memset(&field, 0, sizeof(field));
+	strcpy(field.BrokerID, BrokerID);
+	strcpy(field.InvestorID, UserID);
+	int ret = tdapi->ReqQryTradingAccount(&field, ++request_id);
+	if (0 != ret)
+	{
+		printf("[error] 确认结算结果失败！%d\n", ret);
+	}
 }
 
 // 查询持仓
@@ -80,7 +93,17 @@ void TdOp::ReqQryInvestorPositionDetail()
         tdapi->ReqQryInvestorPositionDetail(&field, 0);
 }
 
-string getFullName(string name){
+string TdOp::getFullName(string name){
+    if(name.find("&") != string::npos){
+        if(name.find(" ") == string::npos){
+            vector<string> array = splitWithStl(name,"&");
+            if(array.size()==2){
+                name = "SP " + getFullName(array[0]) + "&" + getFullName(array[1]);
+            }
+        }
+        return name;
+    }
+
     if(isInt(name.c_str())){
         if(name.size()==2){
             int month = atoi(name.c_str());
@@ -103,17 +126,20 @@ string getFullName(string name){
     return name;
 }
 
+int TdOp::ReqOrderInsert(string name,string dir,string offset,float price,float volume)
+{
+    char buf[32]={0};
+    sprintf(buf,"%.2f",price);
+    string p = buf;
+    sprintf(buf,"%.0f",volume);
+    string v = buf;
+    return TdOp::ReqOrderInsert(name,dir,offset,p,v);
+}
+
 int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,string volume){
-    if(name.find("&") != string::npos){
-        if(name.find(" ") == string::npos){
-            vector<string> array = splitWithStl(name,"&");
-            if(array.size()==2){
-                name = "SP " + getFullName(array[0]) + "&" + getFullName(array[1]);
-            }
-        }
-    }else{
-        name = getFullName(name);
-    }
+    //printf("insert order: %s %s %s %s %s\n",name.c_str(),dir.c_str(),offset.c_str(),price.c_str(),volume.c_str());
+    name = getFullName(name);
+    //printf("order: %s\n",name.c_str());
     if(price.size()>0 && !isFloat(price.c_str())) return -1;
     if(!isInt(volume.c_str())) return -1;
     int vol = atoi(volume.c_str());

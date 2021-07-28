@@ -1,7 +1,13 @@
 ﻿#include <cstring>
 //#include <iconv.h>
+#include <map>
 #include "util.h"
 #include "ThostFtdcUserApiDataType.h"
+#include "ThostFtdcTraderApi.h"
+
+using namespace std;
+
+extern map<string,CThostFtdcOrderField*> order_datas;
 
 string GbkToUtf8(char *str_str)
 {
@@ -200,4 +206,46 @@ string getOrderStatus(char c,char submit_c,char* str)
         status = GbkToUtf8(str);
     }
     return status;
+}
+
+// 平仓锁定的持仓
+int get_close_frozen(string InstrumentID,string dir){
+    char d = THOST_FTDC_D_Buy;
+    int volume = 0;
+    if(dir==string("sell")) d = THOST_FTDC_D_Sell;
+    for(auto it=order_datas.begin();it!=order_datas.end();++it)
+    {
+        if(string(it->second->InstrumentID) != InstrumentID) continue;
+
+        if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing && it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
+        char offset = it->second->CombOffsetFlag[0];
+        if(offset == THOST_FTDC_OF_Open) continue;
+
+        char dir = it->second->Direction;
+        if(dir == d){
+            volume += it->second->VolumeTotal;
+        }
+    }
+    return volume;
+}
+
+// 未成交单
+int get_valid_order_volume(string InstrumentID,string dir){
+    char d = THOST_FTDC_D_Buy;
+    int volume = 0;
+    if(dir==string("sell")) d = THOST_FTDC_D_Sell;
+    for(auto it=order_datas.begin();it!=order_datas.end();++it)
+    {
+        if(string(it->second->InstrumentID) != InstrumentID) continue;
+
+        if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing && it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
+        char offset = it->second->CombOffsetFlag[0];
+        if(offset != THOST_FTDC_OF_Open) continue;
+
+        char dir = it->second->Direction;
+        if(dir == d){
+            volume += it->second->VolumeTotal;
+        }
+    }
+    return volume;
 }

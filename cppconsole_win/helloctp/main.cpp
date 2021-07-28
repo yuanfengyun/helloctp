@@ -63,6 +63,10 @@ void init_args(int argc,char* argv[]){
     printf("UserID: %s\n",UserID);
     printf("UserProductInfo: %s\n",AppID);
     printf("AuthCode: %s\n",AuthCode);
+	
+	    if(argc > 8){
+        init_wxy_schedule(argv[8]);
+    }
 }
 
 void* get_stdin_thread(void*) {

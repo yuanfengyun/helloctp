@@ -1,0 +1,1 @@
+helloctp.exe tcp://180.168.146.187:10131 tcp://180.168.146.187:10130 9999 simnow_client_test 0000000000000000 123616 nanase4ever schedule.txt

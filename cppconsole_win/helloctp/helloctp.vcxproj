@@ -29,6 +29,7 @@
     <ClInclude Include="tdspi.h" />
     <ClInclude Include="td_op.h" />
     <ClInclude Include="util.h" />
+    <ClInclude Include="wxy_schedule.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="console.cpp" />
@@ -39,6 +40,7 @@
     <ClCompile Include="tdspi.cpp" />
     <ClCompile Include="td_op.cpp" />
     <ClCompile Include="util.cpp" />
+    <ClCompile Include="wxy_schedule.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -102,11 +104,14 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\code\helloctp\helloctp\api_release;D:\code\helloctp\helloctp\pthread\include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\code\helloctp\helloctp\api_release;D:\code\helloctp\helloctp\pthread\lib\x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\code\helloctp\helloctp\api;D:\code\helloctp\helloctp\pthread\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\code\helloctp\helloctp\api;D:\code\helloctp\helloctp\pthread\lib\x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>D:\code\helloctp\helloctp\api_release;D:\code\helloctp\helloctp\pthread\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\code\helloctp\helloctp\api_release;D:\code\helloctp\helloctp\pthread\lib\x86;$(LibraryPath)</LibraryPath>
+    <ReferencePath>D:\code\helloctp\helloctp\api_release;D:\code\helloctp\helloctp\pthread\lib\x86;$(ReferencePath)</ReferencePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -168,14 +173,15 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>HAVE_STRUCT_TIMESPEC;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>ws2_32.lib;pthreadVSE2.lib;thostmduserapi_se.lib;thosttraderapi_se.lib;pthreadVCE2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

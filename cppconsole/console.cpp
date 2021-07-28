@@ -197,6 +197,7 @@ void* handle_msg(Msg* msg)
               ordersysid_2_order[string(p->OrderSysID)] = key;
           }
           if(position_inited)
+              if(p->OrderStatus == THOST_FTDC_OST_AllTraded || p->OrderStatus == THOST_FTDC_OST_PartTradedQueueing || p->OrderStatus == THOST_FTDC_OST_NoTradeQueueing)
               printf("[notify] %s 订单: %4d  %s\t%s %s %6.0lf %3d/%d\t %s\n",
                       p->InsertTime, id, p->InstrumentID,
                       getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
@@ -212,7 +213,21 @@ void handle_cmd(char* cmd)
     vector<std::string> array = splitWithStl(scmd," ");
     string c = array[0];
 
-    if(c == string("s") || c == string("show")){
+    if(c == ("help")){
+        printf("=============================\n");
+        printf("s or show (行情)\n");
+        printf("o (有效委托)\n");
+        printf("oo (所有委托)\n");
+        printf("trade (成交记录)\n");
+        printf("p (持仓)\n");
+        printf("kk 09 4 4600 (空4手09)\n");
+        printf("pk 09 4 4600 (平4手09空单)\n");
+        printf("kd 09 4 4600 (多4手09)\n");
+        printf("pd 09 4 4600 (平4手09多单)\n");
+        printf("wxy kd 09 10 (10个点网格刷09多单)\n");
+        printf("wxy kk 09 10 (10个点网格刷09空单)\n");
+    }
+    else if(c == string("s") || c == string("show")){
         printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
         {

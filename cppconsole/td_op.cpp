@@ -122,9 +122,9 @@ int TdOp::ReqOrderInsert(string name,string dir,string offset,float price,float 
 }
 
 int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,string volume){
-    printf("insert order: %s %s %s %s %s\n",name.c_str(),dir.c_str(),offset.c_str(),price.c_str(),volume.c_str());
+    //printf("insert order: %s %s %s %s %s\n",name.c_str(),dir.c_str(),offset.c_str(),price.c_str(),volume.c_str());
     name = getFullName(name);
-    printf("order: %s\n",name.c_str());
+    //printf("order: %s\n",name.c_str());
     if(price.size()>0 && !isFloat(price.c_str())) return -1;
     if(!isInt(volume.c_str())) return -1;
     int vol = atoi(volume.c_str());

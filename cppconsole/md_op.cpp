@@ -9,6 +9,6 @@ void MdOp::ReqUserLogin()
 
 void MdOp::SubscribeMarketData()
 {
-    char* instruments[] = {"jd2108","jd2109","jd2110","jd2111","jd2112","jd2201"};
-    mdapi->SubscribeMarketData(instruments,6);
+    char* instruments[] = {"jd2108","jd2109","jd2110","jd2111","jd2112","jd2201","jd2205","jd2207"};
+    mdapi->SubscribeMarketData(instruments,8);
 }

@@ -73,6 +73,7 @@ void TdSpi::OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin, CThostFtd
     printf("[info] 查询持仓\n");
     TdOp::ReqConfirmSettlement();
     TdOp::ReqQryInvestorPosition();
+    TdOp::ReqQryTradingAccount();
 }
 
 ///登出请求响应
@@ -215,6 +216,11 @@ void TdSpi::OnRspQryInvestorPosition(CThostFtdcInvestorPositionField *pInvestorP
 ///请求查询资金账户响应
 void TdSpi::OnRspQryTradingAccount(CThostFtdcTradingAccountField *pTradingAccount, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    if(pTradingAccount != NULL) {
+        printf("[notify] account: 保证金: %f 可用:%f 总共:%f", pTradingAccount->CurrMargin,pTradingAccount->Available, pTradingAccount->CurrMargin + pTradingAccount->Available);
+    }else{
+        check_error("查询资金账户",pRspInfo);
+    }
 }
 
 ///请求查询投资者响应

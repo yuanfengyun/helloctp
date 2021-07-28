@@ -188,4 +188,15 @@ void TdOp::ReqUserPasswordUpdate(const char* password)
     }   
 }
 
-
+void TdOp::ReqQryTradingAccount()
+{
+	CThostFtdcQryTradingAccountField field;
+	memset(&field, 0, sizeof(field));
+	strcpy(field.BrokerID, BrokerID);
+	strcpy(field.InvestorID, UserID);
+	int ret = tdapi->ReqQryTradingAccount(&field, ++request_id);
+	if (0 != ret)
+	{
+		printf("[error] 确认结算结果失败！%d\n", ret);
+	}
+}

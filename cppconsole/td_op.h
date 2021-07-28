@@ -20,4 +20,6 @@ public:
     static void ReqOrderAction(void* arg);
 
     static void ReqUserPasswordUpdate(const char* password);
+
+    static void ReqQryTradingAccount();
 };

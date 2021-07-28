@@ -10,6 +10,7 @@
 #include "util.h"
 #include "msg.h"
 #include "td_op.h"
+#include "md_op.h"
 #include "position.h"
 #include "wxy_schedule.h"
 
@@ -385,6 +386,10 @@ void handle_cmd(char* cmd)
                 printf("short %s %d\n",it->first.c_str(),it->second);
             }
         }
+    }
+    else if(c == string("sub")){
+        if(array.size() < 2) return;
+        MdOp::SubscribeMarketData(array[1].c_str());
     }
     add_history(cmd);
 }

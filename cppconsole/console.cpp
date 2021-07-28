@@ -339,12 +339,14 @@ void handle_cmd(char* cmd)
     }
     else if(c == string("c")){
         if(array.size() < 2) return;
-        if(!isInt(array[1].c_str())) return;
+        for(int i=1;i<array.size();i++){
+            if(!isInt(array[i].c_str())) return;
 
-        int no = atoi(array[1].c_str());
-        string key = n_2_order[no];
-        auto p = order_datas[key];
-        TdOp::ReqOrderAction(p);
+            int no = atoi(array[i].c_str());
+            string key = n_2_order[no];
+            auto p = order_datas[key];
+            TdOp::ReqOrderAction(p);
+        }
     }
     else if(c == string("password")){
         if(array.size() < 2) return;

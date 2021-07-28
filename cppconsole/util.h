@@ -21,3 +21,7 @@ const char* getPositionDir(char c);
 const char* getOffset(char c);
 
 string getOrderStatus(char c,char submit_c,char* str);
+
+int get_close_frozen(string InstrumentID,string dir);
+
+int get_valid_order_volume(string InstrumentID,string dir);

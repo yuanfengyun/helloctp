@@ -11,6 +11,7 @@
 #include "msg.h"
 #include "td_op.h"
 #include "position.h"
+#include "wxy_schedule.h"
 
 using namespace std;
 
@@ -20,18 +21,28 @@ map<string,CThostFtdcInvestorPositionField*> position_datas;
 map<string,CThostFtdcTradeField*> trade_datas;
 map<string,CThostFtdcOrderField*> order_datas;
 map<string,Position*> positions;
+map<string,int> wxy_long_datas;
+map<string,int> wxy_short_datas;
+WxySchedule* schedule = NULL;
 
 int n_2_order_n = 0;
 map<int,string> n_2_order;
 map<string,int> order_2_n;
 map<string,int> ordersysid_2_key;
+map<string,string> ordersysid_2_order;
+
+void init_wxy_schedule(char* filename){
+   schedule = new WxySchedule;
+   schedule->init(filename);
+}
 
 int get_order_id(CThostFtdcOrderField* p){
     char key_buff[256]={0};
-    sprintf(key_buff,"%s-%d-%d-%s",p->InsertTime,
-            p->FrontID,p->SessionID,p->OrderRef);
+    sprintf(key_buff,"%d-%d-%s",p->FrontID,p->SessionID,p->OrderRef);
     string key = string(key_buff);
-    return order_2_n[key];
+    auto it = order_2_n.find(key);
+    if(it ==order_2_n.end()) return 0;
+    return it->second;
 }
 
 void update_position_with_trade(CThostFtdcTradeField* t)
@@ -63,26 +74,7 @@ void update_position_with_trade(CThostFtdcTradeField* t)
     }
 }
 
-// 平仓锁定的持仓
-int get_close_frozen(string InstrumentID,string dir){
-    char d = THOST_FTDC_D_Buy;
-    int volume = 0;
-    if(dir==string("sell")) d = THOST_FTDC_D_Sell;
-    for(auto it=order_datas.begin();it!=order_datas.end();++it)
-    {
-        if(string(it->second->InstrumentID) != InstrumentID) continue;
 
-        if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
-        char offset = it->second->CombOffsetFlag[0];
-        if(offset == THOST_FTDC_OF_Open) continue;
-
-        char dir = it->second->Direction;
-        if(dir == d){
-            volume += it->second->VolumeTotal;
-        }
-    }
-    return volume;
-}
 
 // 开仓锁定（money)
 int get_open_frozen(){
@@ -90,6 +82,18 @@ int get_open_frozen(){
 }
 
 void update_position_with_order(){
+}
+
+float GetOrderPrice1(CThostFtdcTradeField* p){
+    auto it = ordersysid_2_order.find(string(p->OrderSysID));
+    if(it != ordersysid_2_order.end()){
+        auto it_order = order_datas.find(it->second);
+        if(it_order != order_datas.end() && it_order->second->OrderPriceType==THOST_FTDC_OPT_LimitPrice){
+            return it_order->second->LimitPrice;
+        }
+    }
+
+return p->Price;
 }
 
 void* handle_msg(Msg* msg)
@@ -126,6 +130,7 @@ void* handle_msg(Msg* msg)
                 update_position_with_trade(it->second);
             }
             position_inited = true;
+            if(schedule !=NULL) schedule->run();
         }
         ins += " ";
         ins += getPositionDir(p->PosiDirection);
@@ -151,35 +156,53 @@ void* handle_msg(Msg* msg)
             printf("[notify] %s 成交: %4d  %s\t%s %s %6.0f %3d手\n",p->TradeTime,id,p->InstrumentID,
                     getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
             update_position_with_trade(p);
-        }
-    }
-    if(msg->id == msg_order_data){
-        auto* p = (CThostFtdcOrderField*)msg->ptr;
-        sprintf(key_buff,"%s-%d-%d-%s",p->InsertTime,
-                p->FrontID,p->SessionID,p->OrderRef);
-        string key = string(key_buff);
-        auto it = order_datas.find(key);
-        int id = 0;
-        if(it!=order_datas.end()){
-            id = order_2_n[key];
-            delete it->second;
-        }else{
-            id = ++n_2_order_n;
-            order_2_n[key] = id;
-        }
-        order_datas[key] = p;
-        n_2_order[id] = key;
 
-        if(p->OrderSysID[0] > 0){
-            ordersysid_2_key[string(p->OrderSysID)] = id;
-        }
-        if(position_inited)
-            printf("[notify] %s 订单: %4d  %s\t%s %s %6.0lf %3d/%d\t %s\n",
-                    p->InsertTime, id, p->InstrumentID,
-                    getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
-                    p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
-                    getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
-    }
+            auto it_long = wxy_long_datas.find(p->InstrumentID);
+            auto it_short = wxy_short_datas.find(p->InstrumentID);
+
+            if(it_long != wxy_long_datas.end()){
+                if(p->Direction==THOST_FTDC_D_Buy && p->OffsetFlag==THOST_FTDC_OF_Open){
+                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","close",GetOrderPrice1(p)+it_long->second,p->Volume);
+                }else if(p->Direction==THOST_FTDC_D_Sell && p->OffsetFlag!=THOST_FTDC_OF_Open){
+                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","open",GetOrderPrice1(p)-it_long->second,p->Volume);
+                }
+            }
+            if(it_short != wxy_short_datas.end()){
+                if(p->Direction==THOST_FTDC_D_Buy && p->OffsetFlag!=THOST_FTDC_OF_Open){
+                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","open",GetOrderPrice1(p)+it_short->second,p->Volume);
+                }else if(p->Direction==THOST_FTDC_D_Sell && p->OffsetFlag==THOST_FTDC_OF_Open){
+                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","close",GetOrderPrice1(p)-it_short->second,p->Volume);
+                }
+            }
+         }
+       }
+       if(msg->id == msg_order_data){
+          auto* p = (CThostFtdcOrderField*)msg->ptr;
+          sprintf(key_buff,"%d-%d-%s",p->FrontID,p->SessionID,p->OrderRef);
+          string key = string(key_buff);
+          auto it = order_datas.find(key);
+          int id = 0;
+          if(it!=order_datas.end()){
+              id = order_2_n[key];
+              delete it->second;
+          }else{
+              id = ++n_2_order_n;
+              order_2_n[key] = id;
+          }
+          order_datas[key] = p;
+          n_2_order[id] = key;
+
+          if(p->OrderSysID[0] > 0){
+              ordersysid_2_key[string(p->OrderSysID)] = id;
+              ordersysid_2_order[string(p->OrderSysID)] = key;
+          }
+          if(position_inited)
+              printf("[notify] %s 订单: %4d  %s\t%s %s %6.0lf %3d/%d\t %s\n",
+                      p->InsertTime, id, p->InstrumentID,
+                      getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
+                      p->LimitPrice,p->VolumeTraded,p->VolumeTotalOriginal,
+                      getOrderStatus(p->OrderStatus,p->OrderSubmitStatus,p->StatusMsg).c_str());
+          }
 }
 
 void handle_cmd(char* cmd)
@@ -281,7 +304,7 @@ void handle_cmd(char* cmd)
         {
             if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
             string msg = GbkToUtf8(it->second->StatusMsg);
-            printf("%s %s\t%s\t%s  %s %6.0lf  %2d/%d\t %s\n",
+            printf("%s %d\t%s\t%s  %s %6.0lf  %2d/%d\t %s\n",
                     it->second->InsertTime, get_order_id(it->second), it->second->InstrumentID,
                     getDir(it->second->Direction),getOffset(it->second->CombOffsetFlag[0]),
                     it->second->LimitPrice,it->second->VolumeTraded,it->second->VolumeTotalOriginal,msg.c_str());
@@ -311,6 +334,40 @@ void handle_cmd(char* cmd)
     else if(c == string("password")){
         if(array.size() < 2) return;
         TdOp::ReqUserPasswordUpdate(array[1].c_str());
+    }
+    else if(c == string("wxy")){
+        if(array.size()<2) return;
+        if(array[1] == string("kd")){
+            if(array.size()<4) return;
+            int i = atoi(array[3].c_str());
+            string name = TdOp::getFullName(array[2]);
+            wxy_long_datas[name] = i;
+        }
+        if(array[1] == string("kk")){
+            if(array.size()<4) return;
+            int i = atoi(array[3].c_str());
+            string name = TdOp::getFullName(array[2]);
+            wxy_short_datas[name] = i;
+        }
+        if(array[1] == string("cd")){
+            if(array.size()<3) return;
+            string name = TdOp::getFullName(array[2]);
+            wxy_long_datas.erase(name);
+        }
+        if(array[1] == string("ck")){
+            if(array.size()<3) return;
+            string name = TdOp::getFullName(array[2]);
+            wxy_short_datas.erase(name);
+        }
+        if(array[1]==string("show")){
+            printf("========wxy=======\n");
+            for(auto it=wxy_long_datas.begin();it!=wxy_long_datas.end();++it){
+                printf("long %s %d\n",it->first.c_str(),it->second);
+            }
+            for(auto it=wxy_short_datas.begin();it!=wxy_short_datas.end();++it){
+                printf("short %s %d\n",it->first.c_str(),it->second);
+            }
+        }
     }
     add_history(cmd);
 }

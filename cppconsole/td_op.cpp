@@ -79,6 +79,10 @@ void TdOp::ReqQryInvestorPositionDetail()
 }
 
 string TdOp::getFullName(string name){
+    if(name[0]=='\"'){
+        name = name.substr(1,name.size()-2);
+        printf("name: %s||",name.c_str());
+    }
     if(name.find("&") != string::npos){
         if(name.find(" ") == string::npos){
             vector<string> array = splitWithStl(name,"&");
@@ -161,7 +165,7 @@ int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,strin
     if(ret != 0){
         printf("[error] 报单失败 error:%d\n",ret);
     } else{
-        printf("[info] 报单成功\n");
+        //printf("[info] 报单成功\n");
     }
 }
 

@@ -123,7 +123,7 @@ void* main_thread(void*)
     int len = 0;
     char readbuf[1024] = {0};
     char writebuf[1024] = {0};
-    rl_callback_handler_install ("ctp> ", handle_cmd);
+    rl_callback_handler_install ("", handle_cmd);
     while(1)
     {
         FD_ZERO(&rset);

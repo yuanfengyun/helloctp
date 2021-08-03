@@ -17,12 +17,6 @@ void TdOp::ReqAuthenticate() {
     strcpy(req.UserProductInfo,AppID);
     strcpy(req.AuthCode,AuthCode);
 
-    printf("======");
-    printf("BrokerID: %s\n",req.BrokerID);
-    printf("UserID: %s\n",req.UserID);
-    printf("UserProductInfo: %s\n",req.AppID);
-    printf("AuthCode: %s\n",req.AuthCode);
-
     int iResult = tdapi->ReqAuthenticate(&req, ++request_id);
 
     if( iResult != 0) {

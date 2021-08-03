@@ -9,14 +9,14 @@ Position::Position(CThostFtdcInvestorPositionField* p)
     // 昨日持仓
     if(p->PosiDirection == THOST_FTDC_PD_Long){
         LastLong = p->YdPosition;
+        Long = p->Position;
     }
     else if(p->PosiDirection == THOST_FTDC_PD_Short)
     {
         LastShort = p->YdPosition;
+        Short = p->Position;
     }
     // 当前持仓
-    Long = LastLong;
-    Short = LastShort;
 
     // 锁定的持仓
     LongFrozen = p->LongFrozen;

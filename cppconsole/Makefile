@@ -56,7 +56,4 @@ simnow24:
 xf_test:
 	LD_LIBRARY_PATH=$(API) ./main tcp://183.2.185.160:41313 tcp://183.2.185.160:41305 6050 client_yungege_1.0 XFQHXFQHXFQHXFQH 10000066 a####1236543
 
-xf:
-	LD_LIBRARY_PATH=$(API) ./main tcp://180.168.146.187:10212 tcp://180.168.146.187:10202 9999 simnow_client_test 0000000000000000 123616 nanase4ever
-
 

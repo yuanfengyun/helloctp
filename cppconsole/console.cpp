@@ -119,16 +119,20 @@ void* handle_msg(Msg* msg)
         if(itp == positions.end()){
             positions[ins] = new Position(p);
         }else{
-            if(p->PosiDirection == THOST_FTDC_PD_Long)
+            if(p->PosiDirection == THOST_FTDC_PD_Long){
                 itp->second->LastLong = p->YdPosition;
-            else if(p->PosiDirection == THOST_FTDC_PD_Short)
+                itp->second->Long = p->Position;
+            }
+            else if(p->PosiDirection == THOST_FTDC_PD_Short){
                 itp->second->LastShort = p->YdPosition;
+                itp->second->Short = p->Position;
+            }
         }
 
         //  根据成交记录整理出当前持仓
         if(msg->isLast){
             for(auto it = trade_datas.begin();it!=trade_datas.end();it++){
-                update_position_with_trade(it->second);
+                //dpdate_position_with_trade(it->second);
             }
             position_inited = true;
             if(schedule !=NULL) schedule->run();
@@ -232,6 +236,9 @@ void handle_cmd(char* cmd)
         printf("wxy kd 09 10 (10个点网格刷09多单)\n");
         printf("wxy kk 09 10 (10个点网格刷09空单)\n");
     }
+    if(c==string("cls") || c == string("clear")){
+        printf("\033[2J");
+    }
     else if(c == string("s") || c == string("show")){
         printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
@@ -315,6 +322,7 @@ void handle_cmd(char* cmd)
         printf("====position====\n");
         for(auto it=positions.begin();it!=positions.end();++it)
         {
+            if(it->second->Long == 0 && it->second->Short == 0) continue;
             printf("%s\t long:%3d  frozen:%3d\tshort:%3d frozen:%3d\n",
                     it->second->InstrumentID,
                     it->second->Long,

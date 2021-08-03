@@ -57,6 +57,7 @@ void TdSpi::OnRspAuthenticate(CThostFtdcRspAuthenticateField *pRspAuthenticateFi
     if(!check_error("客户端认证失败:",pRspInfo)){
         return;
     }
+    printf("[info] 交易服务器认证成功\n");
     TdOp::ReqUserLogin();
 }
 

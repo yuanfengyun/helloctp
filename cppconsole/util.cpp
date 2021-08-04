@@ -60,7 +60,7 @@ std::vector<std::string> splitWithStl(const std::string &str,const std::string &
     return resVec;
 }
 
-string&   replace_all(string&   str,const   string&   old_value,const   string&   new_value)
+string& replace_all(string& str,const string& old_value,const string& new_value)
 {
     while(true){
         string::size_type   pos(0);
@@ -255,4 +255,41 @@ int get_valid_order_volume(string InstrumentID,string dir){
         }
     }
     return volume;
+}
+
+string getFullName(string name){
+    if(name[0]=='\"'){
+        name = name.substr(1,name.size()-2);
+        printf("name: %s||",name.c_str());
+    }
+    if(name.find("&") != string::npos){
+        if(name.find(" ") == string::npos){
+            vector<string> array = splitWithStl(name,"&");
+            if(array.size()==2){
+                name = "SP " + getFullName(array[0]) + "&" + getFullName(array[1]);
+            }
+        }
+        return name;
+    }
+
+    if(isInt(name.c_str())){
+        if(name.size()==2){
+            int month = atoi(name.c_str());
+            char year_buf[32] = {0};
+            time_t currtime;
+            time(&currtime);
+            struct tm *today = localtime(&currtime);
+            if(month < today->tm_mon+1){
+                sprintf(year_buf,"%d", today->tm_year - 100 + 1);
+            }else{
+
+                sprintf(year_buf,"%d", today->tm_year - 100);
+            }
+            name = year_buf + name;
+        }
+
+        name = "jd" + name;
+    }
+
+    return name;
 }

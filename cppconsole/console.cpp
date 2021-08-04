@@ -107,6 +107,10 @@ void* handle_msg(Msg* msg)
         auto it = market_datas.find(ins);
         if(it!=market_datas.end()){
             delete it->second;
+        }else{
+            if(schedule !=NULL && schedule->m_name == ins && position_inited){
+                schedule->run();
+            }
         }
         market_datas[ins] = p;
         //printf("data haha\n");
@@ -135,7 +139,7 @@ void* handle_msg(Msg* msg)
                 //dpdate_position_with_trade(it->second);
             }
             position_inited = true;
-            if(schedule !=NULL) schedule->run();
+            if(schedule !=NULL && market_datas.find(schedule->m_name)!=market_datas.end()) schedule->run();
         }
         ins += " ";
         ins += getPositionDir(p->PosiDirection);
@@ -187,8 +191,10 @@ void* handle_msg(Msg* msg)
           string key = string(key_buff);
           auto it = order_datas.find(key);
           int id = 0;
+          bool show = true;
           if(it!=order_datas.end()){
               id = order_2_n[key];
+              show = it->second->OrderStatus != p->OrderStatus;
               delete it->second;
           }else{
               id = ++n_2_order_n;
@@ -204,7 +210,7 @@ void* handle_msg(Msg* msg)
           if(position_inited)
               if(p->OrderStatus != THOST_FTDC_OST_AllTraded &&
                  p->OrderStatus != THOST_FTDC_OST_PartTradedQueueing && 
-                 p->OrderStatus != THOST_FTDC_OST_Unknown)
+                 p->OrderStatus != THOST_FTDC_OST_Unknown && show)
               printf("[notify] %s 订单: %4d  %s\t%s %s %6.0lf %3d/%d\t 状态:%c %s\n",
                       p->InsertTime, id, p->InstrumentID,
                       getDir(p->Direction),getOffset(p->CombOffsetFlag[0]),
@@ -225,7 +231,7 @@ void handle_cmd(char* cmd)
         printf("s or show (行情)\n");
         printf("o (有效委托)\n");
         printf("oo (所有委托)\n");
-        printf("trade (成交记录)\n");
+        printf("r or trade (成交记录)\n");
         printf("p (持仓)\n");
         printf("kk 09 4 4600 (空4手09)\n");
         printf("pk 09 4 4600 (平4手09空单)\n");
@@ -233,8 +239,12 @@ void handle_cmd(char* cmd)
         printf("pd 09 4 4600 (平4手09多单)\n");
         printf("zt 09 10 (多09空10各1手)\n");
         printf("ft 09 10 (空09多10各1手)\n");
+        printf("pzt 09 10 (平多09空10各1手)\n");
+        printf("pft 09 10 (平空09多10各1手)\n");
         printf("wxy kd 09 10 (10个点网格刷09多单)\n");
         printf("wxy kk 09 10 (10个点网格刷09空单)\n");
+        printf("wxy cd 09 (取消刷09多单)\n");
+        printf("wxy ck 09 (取消刷09空单)\n");
     }
     if(c==string("cls") || c == string("clear")){
         printf("\033[2J");
@@ -243,80 +253,81 @@ void handle_cmd(char* cmd)
         printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
         {
-            printf("%s\t%d %d\t%d %d\t%d\n",
+            printf("%s\t%5d %5d %5d %5d %5d %5d %d\t%d\n",
                     it->second->InstrumentID,
                     int(it->second->BidPrice1),
                     int(it->second->AskPrice1),
                     int(it->second->HighestPrice),
                     int(it->second->LowestPrice),
-                    int(it->second->OpenInterest - it->second->PreOpenInterest));
+                    int(it->second->UpperLimitPrice),
+                    int(it->second->LowerLimitPrice),
+                    int(it->second->OpenInterest - it->second->PreOpenInterest),
+                    int(it->second->OpenInterest));
         }
     }
     else if(c == string("kd")){
         if(array.size() < 3){
             return;
         }
-        string ins = array[1];
-        string volume = array[2];
         string price = "";
         if(array.size()>3)
             price = array[3];
-        TdOp::ReqOrderInsert(ins,"buy","open",price,volume);
+        TdOp::ReqOrderInsert(array[1],"buy","open",price,array[2]);
     }
     else if(c == string("kk")){
         if(array.size() < 3){
             return;
         }
-        string ins = array[1];
-        string volume = array[2];
         string price = "";
         if(array.size()>3)
             price = array[3];
-        TdOp::ReqOrderInsert(ins,"sell","open",price,volume);
+        TdOp::ReqOrderInsert(array[1],"sell","open",price,array[2]);
     }
     else if(c == string("pd")){
         if(array.size() < 3){
             return;
         }
-        string ins = array[1];
-        string volume = array[2];
         string price = "";
         if(array.size()>3)
             price = array[3];
-        TdOp::ReqOrderInsert(ins,"sell","close",price,volume);
+        TdOp::ReqOrderInsert(array[1],"sell","close",price,array[2]);
     }
     else if(c == string("pk")){
         if(array.size() < 3){
             return;
         }
-        string ins = array[1];
-        string volume = array[2];
         string price = "";
         if(array.size()>3)
             price = array[3];
-        TdOp::ReqOrderInsert(ins,"buy","close",price,volume);
+        TdOp::ReqOrderInsert(array[1],"buy","close",price,array[2]);
     }
     else if(c == string("zt")){
         if(array.size() < 3){
             return;
         }
-        string a = array[1];
-        string b = array[2];
-        string volume = "1";
-        string price = "";
-        TdOp::ReqOrderInsert(a,"buy","open",price,volume);
-        TdOp::ReqOrderInsert(b,"sell","open",price,volume);
+        TdOp::ReqOrderInsert(array[1],"buy","open","","1");
+        TdOp::ReqOrderInsert(array[2],"sell","open","","1");
     }
     else if(c == string("ft")){
         if(array.size() < 3){
             return;
         }
-        string a = array[1];
-        string b = array[2];
-        string volume = "1";
-        string price = "";
-        TdOp::ReqOrderInsert(a,"sell","open",price,volume);
-        TdOp::ReqOrderInsert(b,"buy","open",price,volume);
+        TdOp::ReqOrderInsert(array[1],"sell","open","","1");
+        TdOp::ReqOrderInsert(array[2],"buy","open","","1");
+    }
+    else if(c == string("pzt")){
+        if(array.size() < 3){
+            return;
+        }
+        TdOp::ReqOrderInsert(array[1],"sell","close","","1");
+        TdOp::ReqOrderInsert(array[2],"buy","close","","1");
+    }
+    else if(c == string("pft")){
+        if(array.size() < 3){
+            return;
+        }
+        TdOp::ReqOrderInsert(array[1],"buy","close","","1");
+        TdOp::ReqOrderInsert(array[2],"sell","close","","1");
     }
     else if(c == string("p")){
         printf("====position====\n");
@@ -332,10 +343,7 @@ void handle_cmd(char* cmd)
                   );
         }
     }
-    else if(c == string("qp")){
-        TdOp::ReqQryInvestorPosition();
-    }
-    else if(c == string("trade")){
+    else if(c==string("t") || c == string("trade")){
         printf("====trade====\n");
         for(auto it=trade_datas.begin();it!=trade_datas.end();++it)
         {
@@ -392,23 +400,23 @@ void handle_cmd(char* cmd)
         if(array[1] == string("kd")){
             if(array.size()<4) return;
             int i = atoi(array[3].c_str());
-            string name = TdOp::getFullName(array[2]);
+            string name = getFullName(array[2]);
             wxy_long_datas[name] = i;
         }
         if(array[1] == string("kk")){
             if(array.size()<4) return;
             int i = atoi(array[3].c_str());
-            string name = TdOp::getFullName(array[2]);
+            string name = getFullName(array[2]);
             wxy_short_datas[name] = i;
         }
         if(array[1] == string("cd")){
             if(array.size()<3) return;
-            string name = TdOp::getFullName(array[2]);
+            string name = getFullName(array[2]);
             wxy_long_datas.erase(name);
         }
         if(array[1] == string("ck")){
             if(array.size()<3) return;
-            string name = TdOp::getFullName(array[2]);
+            string name = getFullName(array[2]);
             wxy_short_datas.erase(name);
         }
         if(array[1]==string("show")){
@@ -424,7 +432,14 @@ void handle_cmd(char* cmd)
     else if(c == string("sub")){
         if(array.size() < 2) return;
         for(int i=1;i<array.size();i++){
-            MdOp::SubscribeMarketData(TdOp::getFullName(array[i]).c_str());
+            MdOp::SubscribeMarketData(getFullName(array[i]).c_str());
+        }
+    }
+    else if(c == string("call")){
+        for(auto it=order_datas.begin();it!=order_datas.end();++it)
+        {
+            if(it->second->OrderStatus != THOST_FTDC_OST_PartTradedQueueing and it->second->OrderStatus != THOST_FTDC_OST_NoTradeQueueing) continue;
+            TdOp::ReqOrderAction(it->second);
         }
     }
     add_history(cmd);

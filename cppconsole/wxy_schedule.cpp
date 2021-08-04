@@ -50,23 +50,35 @@ void WxySchedule::runBuy(){
 
     int long_total = 0;
     int opened = open_order;
-    for(auto it =m_price_2_volume.rbegin();it!=m_price_2_volume.rend();++it){
-        if(long_position > long_frozen && long_total + it->second > long_frozen){
-            int need_close = long_position - long_frozen;
-            if(need_close > it->second) need_close = it->second;
-            if(need_close > 0){
-                TdOp::ReqOrderInsert(m_name,"sell","close",it->first+m_gride,need_close);
-                long_frozen += need_close;
-            }
-        }
 
+    auto market = market_datas[m_name];
+
+    // 开
+    for(auto it =m_price_2_volume.rbegin();it!=m_price_2_volume.rend();++it){
         long_total += it->second;
         if(long_position + opened < long_total){
             int need_open = long_total - (long_position + opened);
             if(need_open>0){
-                TdOp::ReqOrderInsert(m_name,"buy","open",it->first,need_open);
+                float price = it->first;
+                if(price > market->UpperLimitPrice) price = market->UpperLimitPrice;
+                if(price > market->LowerLimitPrice){
+                    TdOp::ReqOrderInsert(m_name,"buy","open",price,need_open);
+                }
                 opened += need_open;
             }
+        }
+    }
+
+    // 平
+    int valid_long = long_position - long_frozen;
+    for(auto it =m_price_2_volume.begin();it!=m_price_2_volume.end();++it){
+        long_total -= it->second;
+        if(long_total < valid_long){
+            int need_close = valid_long - long_total;
+            float price = it->first + m_gride;
+            if(price < market->LowerLimitPrice) price = market->LowerLimitPrice;
+            if(price < market->UpperLimitPrice) TdOp::ReqOrderInsert(m_name,"sell","close",price,need_close);
+            valid_long -= need_close;
         }
     }
 }
@@ -82,24 +94,35 @@ void WxySchedule::runSell(){
 
     int short_total = 0;
     int opened = open_order;
-    //printf("%d %d %d======\n",short_position,short_frozen,open_order);
+
+    auto market = market_datas[m_name];
+
+    // 开
     for(auto it =m_price_2_volume.begin();it!=m_price_2_volume.end();++it){
         short_total += it->second;
         if(short_position + opened < short_total){
             int need_open = short_total - (short_position + opened);
             if(need_open>0){
-                TdOp::ReqOrderInsert(m_name,"sell","open",it->first,need_open);
+                float price = it->first;
+                if(price < market->LowerLimitPrice) price = market->LowerLimitPrice;
+                if(price < market->UpperLimitPrice){
+                    TdOp::ReqOrderInsert(m_name,"sell","open",price,need_open);
+                }
                 opened += need_open;
             }
         }
+    }
 
-        if(short_position > short_frozen && short_frozen<short_total){
-            int need_close = short_total - short_frozen;
-            if(need_close > it->second) need_close = it->second;
-            if(need_close > 0){
-                TdOp::ReqOrderInsert(m_name,"buy","close",it->first-m_gride,need_close);
-                short_frozen += need_close;
-            }
+    // 平
+    int valid_short = short_position - short_frozen;
+    for(auto it =m_price_2_volume.rbegin();it!=m_price_2_volume.rend();++it){
+        short_total -= it->second;
+        if(short_total < valid_short){
+            int need_close = valid_short - short_total;
+            float price = it->first-m_gride;
+            if(price > market->UpperLimitPrice) price = market->UpperLimitPrice;
+            if(price > market->LowerLimitPrice) TdOp::ReqOrderInsert(m_name,"buy","close",price,need_close);
+            valid_short -= need_close;
         }
     }
 }

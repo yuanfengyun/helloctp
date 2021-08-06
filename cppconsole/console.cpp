@@ -24,6 +24,8 @@ map<string,CThostFtdcOrderField*> order_datas;
 map<string,Position*> positions;
 map<string,int> wxy_long_datas;
 map<string,int> wxy_short_datas;
+map<string,string> diff_map;
+
 WxySchedule* schedule = NULL;
 
 int n_2_order_n = 0;
@@ -253,16 +255,31 @@ void handle_cmd(char* cmd)
         printf("========\n");
         for(auto it=market_datas.begin();it!=market_datas.end();++it)
         {
-            printf("%s\t%5d %5d %5d %5d %5d %5d %d\t%d\n",
-                    it->second->InstrumentID,
-                    int(it->second->BidPrice1),
-                    int(it->second->AskPrice1),
-                    int(it->second->HighestPrice),
-                    int(it->second->LowestPrice),
-                    int(it->second->UpperLimitPrice),
-                    int(it->second->LowerLimitPrice),
-                    int(it->second->OpenInterest - it->second->PreOpenInterest),
-                    int(it->second->OpenInterest));
+            auto p = it->second;
+            printf("%s\t%5d %5d %5d %5d %d\t%d\n",
+                    p->InstrumentID,
+                    int(p->BidPrice1),
+                    int(p->AskPrice1),
+                    int(p->HighestPrice),
+                    int(p->LowestPrice),
+                    int(p->OpenInterest - p->PreOpenInterest),
+                    int(p->OpenInterest));
+        }
+
+        for(auto it=diff_map.begin();it!=diff_map.end();++it){
+            string first = getFullName(it->first);
+            string second = getFullName(it->second);
+            auto it_first = market_datas.find(first);
+            auto it_second = market_datas.find(second);
+            if(it_first != market_datas.end() && it_second != market_datas.end()){
+                auto p1 = it_first->second;
+                auto p2 = it_second ->second;
+                printf("%s-%s\t%5d %5d\n",
+                    it->first.c_str(),
+                    it->second.c_str(),
+                    int(p1->BidPrice1 - p2->AskPrice1),
+                    int(p1->AskPrice1 - p2->BidPrice1));
+            }
         }
     }
     else if(c == string("kd")){
@@ -434,6 +451,10 @@ void handle_cmd(char* cmd)
         for(int i=1;i<array.size();i++){
             MdOp::SubscribeMarketData(getFullName(array[i]).c_str());
         }
+    }
+    else if(c == string("df")){
+        if(array.size() < 3) return;
+        diff_map[array[1]] = array[2];
     }
     else if(c == string("call")){
         for(auto it=order_datas.begin();it!=order_datas.end();++it)

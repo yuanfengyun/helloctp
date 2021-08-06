@@ -28,8 +28,8 @@ char TD_FRONT[64] = "tcp://180.168.146.187:10202";
 //char TD_FRONT[] = "tcp://180.168.146.187:10130";
 
 char BrokerID[32] = "9999";
-char UserID[32] = "123616";
-char Password[32] = "nanase4ever";
+char UserID[32] = "188065";
+char Password[32] = "a####123456";
 
 //string UserID = "188065";
 //string Password = "yungege0";
@@ -82,7 +82,7 @@ void* get_stdin_thread(void*) {
 
 void* md_thread(void*)
 {
-    mdapi = CThostFtdcMdApi::CreateFtdcMdApi("d:/doc/",false,false);
+    mdapi = CThostFtdcMdApi::CreateFtdcMdApi("./",false,false);
 
     mdapi->Init();
     printf("[info] 行情服务器版本：%s\n",mdapi->GetApiVersion());

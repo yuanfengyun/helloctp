@@ -18,12 +18,6 @@ void TdOp::ReqAuthenticate() {
     strcpy(req.UserProductInfo,AppID);
     strcpy(req.AuthCode,AuthCode);
 
-    printf("======");
-    printf("BrokerID: %s\n",req.BrokerID);
-    printf("UserID: %s\n",req.UserID);
-    printf("UserProductInfo: %s\n",req.AppID);
-    printf("AuthCode: %s\n",req.AuthCode);
-
     int iResult = tdapi->ReqAuthenticate(&req, ++request_id);
 
     if( iResult != 0) {
@@ -54,24 +48,11 @@ void TdOp::ReqConfirmSettlement()
         memset(&field, 0, sizeof(field));
         strcpy(field.BrokerID,BrokerID);
         strcpy(field.InvestorID, UserID);
-        int ret = tdapi->ReqSettlementInfoConfirm(&field, ++request_id);
+        int ret = tdapi->ReqSettlementInfoConfirm(&field, 0);
         if(0 != ret)
         {
             printf("[error] 确认结算结果失败！%d\n", ret);
         }
-}
-
-void TdOp::ReqQryTradingAccount()
-{
-	CThostFtdcQryTradingAccountField field;
-	memset(&field, 0, sizeof(field));
-	strcpy(field.BrokerID, BrokerID);
-	strcpy(field.InvestorID, UserID);
-	int ret = tdapi->ReqQryTradingAccount(&field, ++request_id);
-	if (0 != ret)
-	{
-		printf("[error] 确认结算结果失败！%d\n", ret);
-	}
 }
 
 // 查询持仓
@@ -91,39 +72,6 @@ void TdOp::ReqQryInvestorPositionDetail()
         strcpy(field.BrokerID,BrokerID);
         strcpy(field.InvestorID, UserID);
         tdapi->ReqQryInvestorPositionDetail(&field, 0);
-}
-
-string TdOp::getFullName(string name){
-    if(name.find("&") != string::npos){
-        if(name.find(" ") == string::npos){
-            vector<string> array = splitWithStl(name,"&");
-            if(array.size()==2){
-                name = "SP " + getFullName(array[0]) + "&" + getFullName(array[1]);
-            }
-        }
-        return name;
-    }
-
-    if(isInt(name.c_str())){
-        if(name.size()==2){
-            int month = atoi(name.c_str());
-            char year_buf[32] = {0};
-            time_t currtime;
-            time(&currtime);
-            struct tm *today = localtime(&currtime);
-            if(month < today->tm_mon+1){
-                sprintf(year_buf,"%d", today->tm_year - 100 + 1);
-            }else{
-
-                sprintf(year_buf,"%d", today->tm_year - 100);
-            }
-            name = year_buf + name;
-        }
-
-        name = "jd" + name;
-    }
-
-    return name;
 }
 
 int TdOp::ReqOrderInsert(string name,string dir,string offset,float price,float volume)
@@ -161,6 +109,11 @@ int TdOp::ReqOrderInsert(string name,string dir,string offset,string price,strin
     }else{
         o.LimitPrice = atof(price.c_str());
         o.OrderPriceType = THOST_FTDC_OPT_LimitPrice;
+        auto it_market = market_datas.find(name);
+        if(it_market != market_datas.end() && (o.LimitPrice < it_market->second->LowerLimitPrice||o.LimitPrice > it_market->second->UpperLimitPrice)){
+                printf("[error] %s下单价%6lf超涨跌停板\n",name.c_str(),o.LimitPrice);
+                return 1;
+        }
     }
     o.VolumeTotalOriginal = vol;
     o.ContingentCondition = THOST_FTDC_CC_Immediately;
@@ -213,4 +166,17 @@ void TdOp::ReqUserPasswordUpdate(const char* password)
     }else{
         printf("ReqUserPasswordUpdate send\n");
     }   
+}
+
+void TdOp::ReqQryTradingAccount()
+{
+	CThostFtdcQryTradingAccountField field;
+	memset(&field, 0, sizeof(field));
+	strcpy(field.BrokerID, BrokerID);
+	strcpy(field.InvestorID, UserID);
+	int ret = tdapi->ReqQryTradingAccount(&field, ++request_id);
+	if (0 != ret)
+	{
+		printf("[error] 确认结算结果失败！%d\n", ret);
+	}
 }

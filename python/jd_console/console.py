@@ -1,13 +1,10 @@
+from tqsdk import TqApi, TqBacktest,TqAccount, TargetPosTask, TqAuth
 import time
 import threading
 import platform
 import datetime
 import os
 import sys
-
-sys.path.insert(0,"../")
-
-from tqsdk import TqApi, TqAccount
 
 if platform.system() == "Linux":
     import readline
@@ -18,19 +15,12 @@ def cls():
     else:
         os.system("cls")
 
-account = "432"
-password = "234"
-
-#if len(sys.argv) >= 3:
-#    account = sys.argv[1]
-#    password = sys.argv[2]
-#else:
-#    import login
-#    account = login.account
-#    password = login.password
-
-api = TqApi(TqAccount(account, password))
-
+plat = sys.argv[1]
+account = sys.argv[2]
+password = sys.argv[3]
+auth = sys.argv[4]
+api = TqApi(TqAccount(plat, account, password),auth=auth)
+#api = TqApi(TqAccount(plat, account, password),auth=auth)
 l = []
 mquote = {}
 mposition = {}
@@ -40,7 +30,10 @@ today = datetime.date.today()
 current_year = today.year
 current_month = today.month
 m2name = {}
+name2m = {}
 month2long = {}
+wxy_tbl = {}
+wxy_time_tbl = {}
 
 for j in range(current_month,current_month+12):
     i = j
@@ -59,6 +52,7 @@ for j in range(current_month,current_month+12):
     mposition[month] = position
     l.append(month)
     m2name[month] = name
+    name2m[name] = month
 
 def ask_price(quote):
     try:
@@ -81,17 +75,13 @@ def show():
     print("==============show==============")
     for i in l:
         quote = mquote[i]
-        print(i,"\t",bid_price(quote),"\t",ask_price(quote),"\t",quote.highest,"\t",quote.lowest,"\t",quote.open_interest-quote.pre_open_interest)
+        print(i,"  ",bid_price(quote),ask_price(quote),"  ",quote.highest,quote.lowest,"\t",quote.open_interest - quote.pre_open_interest,"\t",quote.open_interest)
     print("")
-    print_tl_price("04","05")
-    print_tl_price("05","06")
+    print_tl_price("11","12")
+    print_tl_price("02","03")
+    print_tl_price("04","06")
     print_tl_price("05","07")
-    print_tl_price("06","07")
-    print_tl_price("06","08")
-    print_tl_price("07","08")
     print_tl_price("08","09")
-    print_tl_price("09","10")
-    print_tl_price("09","01")
 
 def help():
     print("============help================")
@@ -107,11 +97,9 @@ def help():
     print("pzt 09 01 1")
     print("ft 05 06 1")
     print("pft 05 06 1")
-    print("auto zt 07 08 -700 -650 1")
-    print("auto ft 12 01 0 200 1")
-    print("auto kd 09 4100 4300 1")
-    print("auto kk 09 4300 4100 1")
-    print("auto show")
+    print("wxy set 01 10")
+    print("wxy c 01")
+    print("wxy show")
     print("cancel order_id(get from order)")
     print("")
 
@@ -172,128 +160,79 @@ def cancel_order(id):
     else:
         api.cancel_order(id)
 
-def tl_auto(type, month1,month2,open_price,close_price,volume,max_times=1):
-    schdules.append({
-        "type" : type,
-        "name1" : month1,
-        "name2" : month2,
-        "open_price" : open_price,
-        "close_price" : close_price,
-        "volume" : volume,
-        "status" : "ready",
-        "times" : 0,
-        "max_times" : max_times
-    })
+trade_cache = {}
 
-def db_auto(type, month,open_price,close_price,volume,max_times=1):
-    schdules.append({
-        "type" : type,
-        "name" : month,
-        "open_price" : open_price,
-        "close_price" : close_price,
-        "volume" : volume,
-        "status" : "ready",
-        "times" : 0,
-        "max_times" : max_times
-    })
+def init_trade_cache():
+    global trade_cache
+    orders = api.get_order()
+    for id in orders:
+        o = api.get_order(id)
+        for k,trade in o.trade_records.items():
+            if o.direction == trade.direction:
+                trade_cache[trade.exchange_trade_id] = trade
 
-def show_auto():
-    for s in schdules:
-        print("---------------")
-        print("type:",s["type"])
-        if "name" in s:
-            print("name:",s["name"])
-        else:
-            print("name1:",s["name1"])
-            print("name2:",s["name2"])
-        print("open_price:",s["open_price"])
-        print("close_price:",s["close_price"])
-        print("volume:",s["volume"])
-        print("status:",s["status"])
-        if "open_order1" in s:
-            print("open_order1:",s["open_order1"])
-        if "open_order2" in s:
-            print("open_order2:",s["open_order2"])
-        if "close_order1" in s:
-            print("close_order1:",s["close_order1"])
-        if "close_order2" in s:
-            print("close_order2:",s["close_order2"])
+def update_trade_cache():
+    global gride_tbl
+    global trade_cache
+    new_trades = []
+    orders = api.get_order()
+    for id in orders:
+        o = api.get_order(id)
+        name = o.exchange_id + "." + o.instrument_id
+        if o.exchange_id + "." + o.instrument_id != name or o.volume_orign == o.volume_left:
+            continue
+        if name not in name2m:
+            continue
+        month = name2m[name]
+        if month not in wxy_tbl:
+            continue
+        gride = wxy_tbl[month]
+        gride_time = wxy_time_tbl[month]
+        for k,trade in o.trade_records.items():
+            if o.direction != trade.direction:
+                continue
+            if trade.trade_date_time/1000000000 < gride_time - 2:
+                print("time old")
+                continue
+            if trade.exchange_trade_id in trade_cache:
+                continue
+            print("k 2",trade.exchange_trade_id)
+            trade_cache[trade.exchange_trade_id] = trade
+            price = o.limit_price
+            if o.price_type == 'ANY':
+                price = trade.price
+            new_trades.append([name,gride,o.limit_price,o.direction,trade.volume,o.offset])
+
+    for kv in new_trades:
+        name = kv[0]
+        gride = kv[1]
+        price = kv[2]
+        odirection = kv[3]
+        volume = kv[4]
+        ooffset = kv[5]
+        direction = "SELL"
+        offset = "CLOSE"
+        new_price = price + gride
+        if odirection == "SELL":
+            direction = "BUY"
+            new_price = price - gride
+        if new_price == price:
+            continue
+        if ooffset != "OPEN":
+            offset = "OPEN"
+        print(name, direction, offset, volume, new_price)
+        api.insert_order(name, direction=direction, offset=offset, volume=volume, limit_price=new_price)
 
 close = False
-
 class WorkingThread(threading.Thread):
     def run(self):
+        init_trade_cache()
         while True:
             api.wait_update()
             if close:
                api.close()
                break
-            for v in schdules:
-                if v["status"] == "ready":
-                    if v["type"] == "zt" and ask_price(mquote[v["name1"]]) - bid_price(mquote[v["name2"]]) <= v["open_price"]:
-                        o = zt(v["name1"],v["name2"],v["volume"])
-                        v["open_order1"] = o[0]
-                        v["open_order2"] = o[1]
-                        v["status"] = "opening"
-                    
-                    if v["type"] == "ft" and bid_price(mquote[v["name1"]]) - ask_price(mquote[v["name2"]]) >= v["open_price"]:
-                        o = ft(v["name1"],v["name2"],v["volume"])
-                        v["open_order1"] = o[0]
-                        v["open_order2"] = o[1]
-                        v["status"] = "opening"
-
-                    if v["type"] == "kd":
-                        o = insert_order(v["name"],"buy","open",v["volume"],v["open_price"])
-                        v["open_order1"] = o
-                        v["status"] = "opening"
-                
-                    if v["type"] == "kk":
-                        o = insert_order(v["name"],"sell","open",v["volume"],v["open_price"])
-                        v["open_order1"] = o
-                        v["status"] = "opening"
-
-                elif v["status"] == "opening":
-                    open_order1 = v["open_order1"]
-                    if open_order1.volume_left > 0:
-                        continue
-                    if "open_order2" in v:
-                        open_order2 = v["open_order2"]
-                        if open_order2.volume_left > 0:
-                            continue
-                    v["status"] = "opened"
-                elif v["status"] == "opened":
-                    if v["type"] == "zt" and bid_price(mquote[v["name1"]]) - ask_price(mquote[v["name2"]]) >= v["close_price"]:
-                        o = pzt(v["name1"],v["name2"],v["volume"])
-                        v["close_order1"] = o[0]
-                        v["close_order2"] = o[1]
-                        v["status"] = "closing"
-
-                    if v["type"] == "ft" and ask_price(mquote[v["name1"]]) - bid_price(mquote[v["name2"]]) <= v["close_price"]:
-                        o = pft(v["name1"],v["name2"],v["volume"])
-                        v["close_order1"] = o[0]
-                        v["close_order2"] = o[1]
-                        v["status"] = "closing"
-                    if v["type"] == "kd":
-                        o = insert_order(v["name"],"sell","close",v["volume"],v["close_price"])
-                        v["close_order1"] = o
-                        v["status"] = "closing"
-                    if v["type"] == "kk":
-                        o = insert_order(v["name"],"buy","close",v["volume"],v["close_price"])
-                        v["close_order1"] = o
-                        v["status"] = "closing"
-                elif v["status"] == "closing":
-                    close_order1 = v["close_order1"]
-                    if close_order1.volume_left > 0:
-                        continue
-                    if "close_order2" in v:
-                        close_order2 = v["close_order2"]
-                        if close_order2.volume_left > 0:
-                            continue
-                    v ["times"] = v["times"] + 1
-                    if v["times"] < v["max_times"]:
-                        v["status"] = "ready"
-                    else:
-                        v["status"] = "done"
+            update_trade_cache()
 
 wt = WorkingThread()
 wt.start()
@@ -342,23 +281,19 @@ while True:
         pft(args[1],args[2],int(args[3]))
     elif cmd == "cancel" or cmd == "c":
         cancel_order(str(line[len(cmd)+1:]))
-    elif cmd == "auto":
-        if args[1] == "zt":
-            tl_auto("zt",args[2],args[3],int(args[4]),int(args[5]),int(args[6]))
-        elif args[1] == "ft":
-            tl_auto("ft",args[2],args[3],int(args[4]),int(args[5]),int(args[6]))
-        elif args[1] == "kd":
-            if len(args) >= 7:
-                db_auto("kd",args[2],int(args[3]),int(args[4]),int(args[5]),int(args[6]))
-            else:
-                db_auto("kd",args[2],int(args[3]),int(args[4]),int(args[5]))
-        elif args[1] == "kk":
-            if len(args) >= 7:
-                db_auto("kk",args[2],int(args[3]),int(args[4]),int(args[5]),int(args[6]))
-            else:
-                db_auto("kk",args[2],int(args[3]),int(args[4]),int(args[5]))
+    elif cmd == "wxy":
+        if args[1] == "set":
+            if len(args) == 4:
+                if args[1] not in wxy_tbl:
+                    wxy_time_tbl[args[2]] = time.time()
+                wxy_tbl[args[2]] = int(args[3])
+        elif args[1] == "c":
+            if len(args) == 3 and (args[2] in wxy_tbl):
+                del wxy_tbl[args[2]]
+                del wxy_time_tbl[args[2]]
         elif args[1] == "show":
-            show_auto()
+            for (k,v) in wxy_tbl.items():
+                print(k,v)
     elif cmd == "cls":
         cls()
     elif cmd == "quit":

@@ -2,6 +2,7 @@
 #include<cstring>
 #include<stdio.h>
 #include<map>
+#include<set>
 #include<vector>
 #include<iostream>
 #include <readline/history.h>
@@ -22,9 +23,8 @@ map<string,CThostFtdcInvestorPositionField*> position_datas;
 map<string,CThostFtdcTradeField*> trade_datas;
 map<string,CThostFtdcOrderField*> order_datas;
 map<string,Position*> positions;
-map<string,int> wxy_long_datas;
-map<string,int> wxy_short_datas;
-map<string,string> diff_map;
+map<string,int> wxy_datas;
+set<pair<string,string>> diff_map;
 
 WxySchedule* schedule = NULL;
 
@@ -168,21 +168,17 @@ void* handle_msg(Msg* msg)
                     getDir(p->Direction),getOffset(p->OffsetFlag),p->Volume,p->Price);
             update_position_with_trade(p);
 
-            auto it_long = wxy_long_datas.find(p->InstrumentID);
-            auto it_short = wxy_short_datas.find(p->InstrumentID);
+            auto it_wxy = wxy_datas.find(p->InstrumentID);
 
-            if(it_long != wxy_long_datas.end()){
+            if(it_wxy != wxy_datas.end()){
                 if(p->Direction==THOST_FTDC_D_Buy && p->OffsetFlag==THOST_FTDC_OF_Open){
-                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","close",GetOrderPrice1(p)+it_long->second,p->Volume);
+                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","close",GetOrderPrice1(p)+it_wxy->second,p->Volume);
                 }else if(p->Direction==THOST_FTDC_D_Sell && p->OffsetFlag!=THOST_FTDC_OF_Open){
-                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","open",GetOrderPrice1(p)-it_long->second,p->Volume);
-                }
-            }
-            if(it_short != wxy_short_datas.end()){
-                if(p->Direction==THOST_FTDC_D_Buy && p->OffsetFlag!=THOST_FTDC_OF_Open){
-                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","open",GetOrderPrice1(p)+it_short->second,p->Volume);
+                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","open",GetOrderPrice1(p)-it_wxy->second,p->Volume);
+                }else if(p->Direction==THOST_FTDC_D_Buy && p->OffsetFlag!=THOST_FTDC_OF_Open){
+                    TdOp::ReqOrderInsert(p->InstrumentID,"sell","open",GetOrderPrice1(p)+it_wxy->second,p->Volume);
                 }else if(p->Direction==THOST_FTDC_D_Sell && p->OffsetFlag==THOST_FTDC_OF_Open){
-                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","close",GetOrderPrice1(p)-it_short->second,p->Volume);
+                    TdOp::ReqOrderInsert(p->InstrumentID,"buy","close",GetOrderPrice1(p)-it_wxy->second,p->Volume);
                 }
             }
          }
@@ -227,6 +223,14 @@ void handle_cmd(char* cmd)
     string scmd(cmd);
     vector<std::string> array = splitWithStl(scmd," ");
     string c = array[0];
+    for(auto it=array.begin();it!=array.end();it++){
+        if(*it==string("sp") || *it==string("SPD")){
+            auto next = ++it;
+            *it = *it + " " + *next;
+            array.erase(++it);
+            break;
+        }
+    }
 
     if(c == ("help")){
         printf("=============================\n");
@@ -243,10 +247,9 @@ void handle_cmd(char* cmd)
         printf("ft 09 10 (空09多10各1手)\n");
         printf("pzt 09 10 (平多09空10各1手)\n");
         printf("pft 09 10 (平空09多10各1手)\n");
-        printf("wxy kd 09 10 (10个点网格刷09多单)\n");
-        printf("wxy kk 09 10 (10个点网格刷09空单)\n");
-        printf("wxy cd 09 (取消刷09多单)\n");
-        printf("wxy ck 09 (取消刷09空单)\n");
+        printf("wxy set 09 10 (10个点网格刷09)\n");
+        printf("wxy c 09 (取消刷09)\n");
+        printf("lh2209 AP205 \"SPD AP204&AP205\" \n");
     }
     if(c==string("cls") || c == string("clear")){
         printf("\033[2J");
@@ -414,35 +417,22 @@ void handle_cmd(char* cmd)
     }
     else if(c == string("wxy")){
         if(array.size()<2) return;
-        if(array[1] == string("kd")){
+        if(array[1] == string("set")){
             if(array.size()<4) return;
             int i = atoi(array[3].c_str());
             string name = getFullName(array[2]);
-            wxy_long_datas[name] = i;
+            wxy_datas[name] = i;
         }
-        if(array[1] == string("kk")){
-            if(array.size()<4) return;
+        if(array[1] == string("c")){
+            if(array.size()<3) return;
             int i = atoi(array[3].c_str());
             string name = getFullName(array[2]);
-            wxy_short_datas[name] = i;
-        }
-        if(array[1] == string("cd")){
-            if(array.size()<3) return;
-            string name = getFullName(array[2]);
-            wxy_long_datas.erase(name);
-        }
-        if(array[1] == string("ck")){
-            if(array.size()<3) return;
-            string name = getFullName(array[2]);
-            wxy_short_datas.erase(name);
+            wxy_datas.erase(name);
         }
         if(array[1]==string("show")){
             printf("========wxy=======\n");
-            for(auto it=wxy_long_datas.begin();it!=wxy_long_datas.end();++it){
-                printf("long %s %d\n",it->first.c_str(),it->second);
-            }
-            for(auto it=wxy_short_datas.begin();it!=wxy_short_datas.end();++it){
-                printf("short %s %d\n",it->first.c_str(),it->second);
+            for(auto it=wxy_datas.begin();it!=wxy_datas.end();++it){
+                printf("%s %d\n",it->first.c_str(),it->second);
             }
         }
     }
@@ -454,7 +444,7 @@ void handle_cmd(char* cmd)
     }
     else if(c == string("df")){
         if(array.size() < 3) return;
-        diff_map[array[1]] = array[2];
+        diff_map.insert(make_pair(array[1],array[2]));
     }
     else if(c == string("call")){
         for(auto it=order_datas.begin();it!=order_datas.end();++it)

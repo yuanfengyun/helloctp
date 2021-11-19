@@ -470,7 +470,7 @@ void TdSpi::OnErrRtnOrderAction(CThostFtdcOrderActionField *pOrderAction, CThost
 ///合约交易状态通知
 void TdSpi::OnRtnInstrumentStatus(CThostFtdcInstrumentStatusField *pInstrumentStatus)
 {
-    //printf("合约交易状态通知\n"); 
+    //printf("合约交易状态通知 %s\n",pInstrumentStatus->InstrumentID); 
 }
 
 ///交易所公告通知

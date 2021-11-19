@@ -40,7 +40,7 @@ void WxySchedule::run()
 }
 
 void WxySchedule::runBuy(){
-    wxy_long_datas[m_name] = m_gride;
+    wxy_datas[m_name] = m_gride;
     int long_position = 0;
     if(positions.find(m_name) != positions.end()){
         long_position = positions[m_name]->Long;
@@ -84,7 +84,7 @@ void WxySchedule::runBuy(){
 }
 
 void WxySchedule::runSell(){
-    wxy_short_datas[m_name] = m_gride;
+    wxy_datas[m_name] = m_gride;
     int short_position = 0;
     if(positions.find(m_name) != positions.end()){
         short_position = positions[m_name]->Short;

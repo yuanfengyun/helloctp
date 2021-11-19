@@ -26,7 +26,6 @@ extern map<string,CThostFtdcTradeField*> trade_datas;
 extern map<string,CThostFtdcOrderField*> order_datas;
 extern map<string,Position*> positions;
 
-extern map<string,int> wxy_long_datas;
-extern map<string,int> wxy_short_datas;
+extern map<string,int> wxy_datas;
 
 

@@ -258,10 +258,6 @@ int get_valid_order_volume(string InstrumentID,string dir){
 }
 
 string getFullName(string name){
-    if(name[0]=='\"'){
-        name = name.substr(1,name.size()-2);
-        printf("name: %s||",name.c_str());
-    }
     if(name.find("&") != string::npos){
         if(name.find(" ") == string::npos){
             vector<string> array = splitWithStl(name,"&");

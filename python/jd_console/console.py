@@ -35,6 +35,46 @@ month2long = {}
 wxy_tbl = {}
 wxy_time_tbl = {}
 
+df_map = {
+        "03-05":0,
+        "04-05":0,
+        "05-06":0,
+        "06-07":0,
+        "05-09":0
+}
+
+def get_conbine_quote(str):
+    return ""
+
+def get_quote_jd(strstr):
+    if len(str)==4:
+        return "DCE.jd" + strstr
+    name = "DCE.jd" + str(current_year-2000) + strstr
+    quote = api.get_quote(name)
+    if quote.expired == True:
+        name = "DCE.jd" + str(current_year-1999) + strstr
+        quote = api.get_quote(name)
+    return quote
+
+def get_quote(strstr):
+    if strstr in mquote:
+        return mquote[strstr]
+    if strstr.find("&") >= 0:
+        return get_conbine_quote(strstr)
+    if strstr.isdigit():
+        return get_quote_jd(strstr)
+    quote = None
+    try:
+        quote = api.get_quote("DCE." + strstr)
+        print(quote)
+    except BaseException as e:
+        print(e)
+        try:
+            quote = api.get_quote("CZCE." + strstr)
+        except BaseException:
+            quote = api.get_quote("SHFE." + strstr)
+    return quote
+
 for j in range(current_month,current_month+12):
     i = j
     if i > 12:
@@ -54,34 +94,46 @@ for j in range(current_month,current_month+12):
     m2name[month] = name
     name2m[name] = month
 
+def sub(str_list):
+    for s in str_list:
+        quote = get_quote(s)
+        if quote is not None:
+            mquote[s] = quote
+            l.append(s)
+
 def ask_price(quote):
     try:
-        return int(quote.ask_price1)
+        return float(quote.ask_price1)
     except:
-        return int(quote.upper_limit)
+        return float(quote.upper_limit)
 
 def bid_price(quote):
     try:
-        return int(quote.bid_price1)
+        return float(quote.bid_price1)
     except:
-        return int(quote.lower_limit)
+        return float(quote.lower_limit)
 
 def print_tl_price(name1,name2):
     price1 = str(ask_price(mquote[name1]) - bid_price(mquote[name2]))
     price2 = str(bid_price(mquote[name1]) - ask_price(mquote[name2]))
-    print(name1+"-"+name2+"\t"+price2+"\t"+price1)
+    print(name1+"-"+name2,"\t",price2,"\t\t",price1)
 
 def show():
     print("==============show==============")
     for i in l:
-        quote = mquote[i]
-        print(i,"  ",bid_price(quote),ask_price(quote),"  ",quote.highest,quote.lowest,"\t",quote.open_interest - quote.pre_open_interest,"\t",quote.open_interest)
+        if i in mquote:
+            quote = mquote[i]
+            print(i,"\t",bid_price(quote),"\t",quote.bid_volume1,"\t",ask_price(quote),"\t",quote.ask_volume1,"\t",quote.highest,quote.lowest,"\t",quote.open_interest - quote.pre_open_interest,"\t",quote.open_interest)
+            m2name[i] = quote.instrument_id
+            if i not in mposition:
+                mposition[i] = api.get_position(quote.instrument_id)
+
     print("")
-    print_tl_price("11","12")
-    print_tl_price("02","03")
-    print_tl_price("04","06")
-    print_tl_price("05","07")
-    print_tl_price("08","09")
+    keys = list(df_map.keys())
+    keys.sort()
+    for k in keys:
+        args = k.split("-")
+        print_tl_price(args[0],args[1])
 
 def help():
     print("============help================")
@@ -106,9 +158,10 @@ def help():
 def position():
     print("============position================")
     for i in l:
-        p = mposition[i]
-        if p.pos_long > 0 or p.pos_short > 0:
-            print(i,"long:",p.pos_long,"\t",p.open_price_long,"\t  short:",p.pos_short,"\t",p.open_price_short)
+        if i in mposition:
+            p = mposition[i]
+            if p.pos_long > 0 or p.pos_short > 0:
+                print(i,"long:",p.pos_long,"\t",p.open_price_long,"\t  short:",p.pos_short,"\t",p.open_price_short)
 
 order_cache = []
 def order():
@@ -126,9 +179,11 @@ def insert_order(month,direction,offset,volume,price=None):
     print("============insert_order================")
     if month in m2name:
         symbol = m2name[month]
-    else:
+    elif month.find("&")>=0:
         ss = month.split("&")
         symbol = "DCE.SP jd" + month2long[ss[0]] + "&jd" + month2long[ss[1]]
+    else:
+        return
     if price is None:
         return api.insert_order(symbol, direction=direction.upper(), offset=offset.upper(), volume=volume)
     return api.insert_order(symbol, direction=direction.upper(), offset=offset.upper(), volume=volume,limit_price=price)
@@ -192,7 +247,7 @@ def update_trade_cache():
             if o.direction != trade.direction:
                 continue
             if trade.trade_date_time/1000000000 < gride_time - 2:
-                print("time old")
+                #print("time old")
                 continue
             if trade.exchange_trade_id in trade_cache:
                 continue
@@ -251,6 +306,14 @@ while True:
         position()
     elif cmd == "order" or cmd == "o":
         order()
+    elif cmd == "sub":
+        if len(args) <= 1:
+            pass
+        sub(args[1:])
+    elif cmd == "df":
+        if len(args) < 3:
+            pass
+        df_map[args[1] + "-" + args[2]] = 0
     elif cmd == "kd":
         if len(args) >= 4:
             insert_order(args[1],"buy","open",int(args[2]),int(args[3]))
@@ -301,4 +364,3 @@ while True:
         break
 
 time.sleep(1)
-
